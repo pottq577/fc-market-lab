@@ -1,9 +1,30 @@
-# FC온라인 이적시장 인텔리전스 문서 인덱스
+---
+meta:
+  contentType: Landing
+---
 
-`meta.contentType: Reference`
+# FC온라인 이적시장 인텔리전스 문서를 어떻게 읽는가
 
-이 디렉터리는 원본 `fconline.md`를 문서 성격별로 재조립한 구조다.
-각 문서는 원문의 연속 구간을 그대로 보존한다.
+이 문서는 FC온라인 이적시장 인텔리전스 Proof of Concept (PoC)의 문서 구조와 읽는 순서를 정의한다.
+각 문서는 하나의 책임만 가지며, 제품 계약에서 구현과 검증까지 추적할 수 있게 연결한다.
+
+## 문서 계획
+
+모든 하위 문서는 이 표를 공통 content plan으로 참조한다.
+오픈 질문은 `risks/risks-and-roadmap.md`에서 한곳에 관리한다.
+
+| 문서                                    | content type | 목표                                          | 대상                | 포함 내용                                     |
+| --------------------------------------- | ------------ | --------------------------------------------- | ------------------- | --------------------------------------------- |
+| `product/prd.md`                        | Conceptual   | 제품이 해결할 문제와 사용자 작업을 설명한다   | 개발자              | 제품 경계, 사용자 작업, 출력 계약, 비목표     |
+| `requirements/requirements.md`          | Reference    | 구현 요구사항과 추적 관계를 고정한다          | 개발자, 리뷰어      | 기능 요구사항, 비기능 요구사항, 추적표        |
+| `data/data-contract.md`                 | Reference    | 사용할 데이터와 품질 기준을 고정한다          | 개발자              | 출처, Gate 0A/0B, 가격 의미, 품질 규칙        |
+| `design/domain-model.md`                | Reference    | 시간축을 포함한 도메인 모델을 정의한다        | 개발자              | 선수, 가격, 관계, 이벤트, 상품, cohort        |
+| `design/analysis-model.md`              | Reference    | 시장 상태를 계산하고 해석하는 방법을 정의한다 | 개발자, 분석 리뷰어 | 수익률, 지수, 상대강도, Shock, Regime         |
+| `architecture/local-poc.md`             | Reference    | 로컬 실행과 재현 구조를 정의한다              | 개발자              | 데이터 계층, `analysis_run`, 프로젝트 구조    |
+| `decisions/adr.md`                      | Reference    | 주요 설계 결정과 근거를 보존한다              | 개발자, 리뷰어      | Architecture Decision Record (ADR)            |
+| `poc/poc-plan.md`                       | Reference    | PoC 범위와 검증 완료 조건을 고정한다          | 개발자              | 대상 표본, 검증 시나리오, acceptance criteria |
+| `implementation/implementation-plan.md` | How-to       | 구현 순서를 실행 가능한 단계로 정한다         | 개발자              | Gate부터 replay까지의 작업 순서               |
+| `risks/risks-and-roadmap.md`            | Reference    | 남은 위험과 후속 판단을 한곳에 관리한다       | 개발자              | 리스크, 오픈 질문, PoC 이후 판단              |
 
 ## 문서 구조
 
@@ -11,63 +32,37 @@
 docs/
 ├── 00_INDEX.md
 ├── product/
-│   ├── product-definition.md
-│   └── user-workflows.md
+│   └── prd.md
 ├── requirements/
 │   └── requirements.md
-├── market/
-│   ├── external-factors.md
-│   ├── player-factors.md
-│   └── cohorts.md
-├── domain/
-│   ├── event-model.md
-│   ├── paid-product-model.md
-│   └── player-relation-model.md
 ├── data/
-│   ├── source-strategy.md
-│   ├── price-history-gate.md
-│   ├── price-semantics.md
-│   └── quality-rules.md
-├── analysis/
-│   ├── market-metrics.md
-│   ├── shock-and-regime.md
-│   ├── methodology.md
-│   └── output-rules.md
+│   └── data-contract.md
+├── design/
+│   ├── domain-model.md
+│   └── analysis-model.md
 ├── architecture/
 │   └── local-poc.md
-├── storage/
-│   └── data-layers.md
-├── poc/
-│   ├── scope.md
-│   ├── validation-scenarios.md
-│   └── acceptance.md
 ├── decisions/
-│   ├── product-decisions.md
 │   └── adr.md
-├── risks/
-│   └── risks-and-notes.md
-├── roadmap/
-│   ├── post-poc.md
-│   └── open-questions.md
+├── poc/
+│   └── poc-plan.md
 ├── implementation/
 │   └── implementation-plan.md
-├── source/
-│   └── fconline.md
+└── risks/
+    └── risks-and-roadmap.md
 ```
 
 ## 읽는 순서
 
-1. `product/product-definition.md`: 제품의 목적과 경계
-2. `requirements/requirements.md`: 구현이 충족해야 할 요구사항
-3. `product/user-workflows.md`: 실제 사용자 작업과 출력 계약
-4. `market/`: 시장을 설명하는 외부·내부 변수와 cohort
-5. `domain/`: 이벤트, 상품, 선수 관계 데이터 모델
-6. `data/`: 데이터 출처, 가격 수집 Gate, 가격 의미와 품질 규칙
-7. `analysis/`: 시장 지표, Shock/Regime, 이벤트 분석과 결과 표현
-8. `poc/`: 대상 범위, 검증 시나리오, 완료 조건
-9. `decisions/`: 제품 결정과 Architecture Decision Record (ADR)
-10. `architecture/`와 `storage/`: 로컬 구현 구조와 데이터 계층
-11. `risks/`와 `roadmap/`: 리스크, PoC 이후 판단, 오픈 질문
-12. `implementation/implementation-plan.md`: 실제 구현 순서
+제품 의도에서 구현 순서까지 다음 순서로 읽는다:
 
-`source/fconline.md`는 원본 보존용이다. 실제 탐색과 구현에서는 위의 성격별 문서를 기준으로 사용한다.
+1. `product/prd.md`
+2. `requirements/requirements.md`
+3. `data/data-contract.md`
+4. `design/domain-model.md`
+5. `design/analysis-model.md`
+6. `architecture/local-poc.md`
+7. `decisions/adr.md`
+8. `poc/poc-plan.md`
+9. `implementation/implementation-plan.md`
+10. `risks/risks-and-roadmap.md`
