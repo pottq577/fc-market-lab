@@ -2,7 +2,8 @@
 
 `meta.contentType: Reference`
 
-이 디렉터리는 원본 `fconline.md`를 문서 성격별로 재조립한 구조다. 각 문서는 원문의 연속 구간을 그대로 보존한다. `manifest.tsv` 순서대로 모든 분할 문서를 이어 붙이면 원문과 바이트 단위로 동일하다.
+이 디렉터리는 원본 `fconline.md`를 문서 성격별로 재조립한 구조다.
+각 문서는 원문의 연속 구간을 그대로 보존한다.
 
 ## 문서 구조
 
@@ -52,7 +53,6 @@ docs/
 │   └── implementation-plan.md
 ├── source/
 │   └── fconline.md
-└── manifest.tsv
 ```
 
 ## 읽는 순서
@@ -69,14 +69,5 @@ docs/
 10. `architecture/`와 `storage/`: 로컬 구현 구조와 데이터 계층
 11. `risks/`와 `roadmap/`: 리스크, PoC 이후 판단, 오픈 질문
 12. `implementation/implementation-plan.md`: 실제 구현 순서
-
-## 무결성
-
-- 원본 줄 수: 1543
-- 원본 바이트: 48384
-- 분할 문서 수: 28
-- SHA-256: `dde1b3f95818d3b8ba62c4f3859573688811bb35f75d310e179018a46717cf59`
-- 재조립 SHA-256: `dde1b3f95818d3b8ba62c4f3859573688811bb35f75d310e179018a46717cf59`
-- 결과: 원본과 분할 문서 재조립 결과가 동일함
 
 `source/fconline.md`는 원본 보존용이다. 실제 탐색과 구현에서는 위의 성격별 문서를 기준으로 사용한다.
