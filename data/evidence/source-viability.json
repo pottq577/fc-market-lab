@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "evidence": [
+    {
+      "source_id": "nexon-open-api-fconline-price-history",
+      "purpose": "PRICE_HISTORY",
+      "source_url": "https://openapi.nexon.com/game/fconline/?id=6",
+      "policy_url": "https://openapi.nexon.com/ko/support/terms/",
+      "policy_checked_at": "2026-09-29T16:20:00+09:00",
+      "access_method": "API_KEY",
+      "native_granularity": "UNKNOWN",
+      "history_span": "UNKNOWN",
+      "price_semantics": "UNKNOWN",
+      "automation_decision": "REJECTED",
+      "decision_reason": "The official FC Online Open API currently documents account, match, ranker, metadata, and image API groups, but no market-wide price-history API. Do not use this source as the Gate 0A price-history source.",
+      "evidence_hash": "UNKNOWN"
+    },
+    {
+      "source_id": "fconline-datacenter-price-history",
+      "purpose": "PRICE_HISTORY",
+      "source_url": "https://fconline.nexon.com/DataCenter",
+      "policy_url": "UNKNOWN",
+      "policy_checked_at": "2026-09-29T16:20:00+09:00",
+      "access_method": "OFFICIAL_WEB_UI",
+      "native_granularity": "UNKNOWN",
+      "history_span": "UNKNOWN",
+      "price_semantics": "UNKNOWN",
+      "automation_decision": "UNKNOWN",
+      "decision_reason": "The official Data Center exposes player and market-related data, but the allowed automation/storage policy and a reproducible machine-readable 180-365 day price-history path have not yet been verified.",
+      "evidence_hash": "UNKNOWN"
+    }
+  ]
+}

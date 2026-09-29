@@ -1,1 +1,7 @@
 docs/source/
+node_modules/
+data/raw/
+data/exports/
+*.db
+*.db-shm
+*.db-wal
