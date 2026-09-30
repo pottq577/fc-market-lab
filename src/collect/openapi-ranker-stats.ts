@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import type { SeedCatalogDocument } from "../catalog/seed-catalog.ts";
+import { normalizeNexonOpenApiKey } from "./openapi-key.ts";
 
 export const OPENAPI_RANKER_STATS_URL =
   "https://open.api.nexon.com/fconline/v1/ranker-stats";
@@ -157,9 +158,7 @@ export async function collectOpenApiRankerStats(
   },
 ): Promise<RankerStatsArtifact[]> {
   validateTargets(targets);
-  if (options.apiKey.trim() === "") {
-    throw new TypeError("apiKey must be a non-empty string");
-  }
+  const apiKey = normalizeNexonOpenApiKey(options.apiKey);
   const matchtype = options.matchtype ?? DEFAULT_RANKER_MATCHTYPE;
   if (!Number.isInteger(matchtype) || matchtype <= 0) {
     throw new TypeError("matchtype must be a positive integer");
@@ -197,7 +196,7 @@ export async function collectOpenApiRankerStats(
     const response = await fetchImpl(url, {
       headers: {
         accept: "application/json",
-        "x-nxopen-api-key": options.apiKey,
+        "x-nxopen-api-key": apiKey,
       },
     });
     if (!response.ok) {

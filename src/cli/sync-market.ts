@@ -5,6 +5,7 @@ import { loadEnvFile } from "node:process";
 import { parseSeedCatalogDocument } from "../catalog/seed-catalog.ts";
 import { collectDatacenterWithPlaywright, DATACENTER_PLAYWRIGHT_CAPTURE_METHOD } from "../collect/datacenter-playwright.ts";
 import { collectOpenApiMetadata } from "../collect/openapi-metadata.ts";
+import { normalizeNexonOpenApiKey } from "../collect/openapi-key.ts";
 import {
   collectOpenApiRankerStats,
   DEFAULT_RANKER_MATCHTYPE,
@@ -237,16 +238,14 @@ const delayBetweenPlayersMs = positiveNumber(
   "FC_MARKET_BROWSER_DELAY_MS",
 );
 const headless = process.env.FC_MARKET_BROWSER_HEADLESS !== "0";
-const apiKey = process.env.NEXON_OPEN_API_KEY ?? "";
+const rawApiKey = process.env.NEXON_OPEN_API_KEY;
 
 if (process.env.FC_MARKET_ENABLE_BROWSER_AUTOMATION !== "1") {
   throw new Error(
     "Browser automation is disabled. Set FC_MARKET_ENABLE_BROWSER_AUTOMATION=1 after reviewing data/evidence/datacenter-browser-automation-policy.json.",
   );
 }
-if (apiKey.trim() === "") {
-  throw new TypeError("NEXON_OPEN_API_KEY environment variable is required");
-}
+const apiKey = normalizeNexonOpenApiKey(rawApiKey);
 
 const lockPath = join("data", ".sync-market.lock");
 await mkdir(dirname(lockPath), { recursive: true });

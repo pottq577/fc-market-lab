@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 
 import { readFile } from "node:fs/promises";
 import { parseSeedCatalogDocument } from "../catalog/seed-catalog.ts";
+import { normalizeNexonOpenApiKey } from "../collect/openapi-key.ts";
 import {
   collectOpenApiRankerStats,
   DEFAULT_RANKER_MATCHTYPE,
@@ -31,10 +32,7 @@ const dbPath = readOption(args, "db") ?? "data/fc-market-lab.db";
 const rawDir = readOption(args, "raw-dir") ?? "data/raw/openapi-ranker-stats";
 const manifestPath = readOption(args, "manifest") ?? join(rawDir, "latest.json");
 const matchtype = Number(readOption(args, "matchtype") ?? DEFAULT_RANKER_MATCHTYPE);
-const apiKey = process.env.NEXON_OPEN_API_KEY ?? "";
-if (apiKey.trim() === "") {
-  throw new TypeError("NEXON_OPEN_API_KEY environment variable is required");
-}
+const apiKey = normalizeNexonOpenApiKey(process.env.NEXON_OPEN_API_KEY);
 
 const catalog = parseSeedCatalogDocument(
   JSON.parse(await readFile(catalogPath, "utf8")),
