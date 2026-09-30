@@ -162,6 +162,12 @@ Path to Glory
 대인 수비 124
 `;
 
+
+const flattenedTeamColorPageText = renderedOnlyPageText.replace(
+  "팀컬러\n소속 팀컬러\n스페인\n첼시\nFC 바르셀로나\nPath to Glory\n관계 팀컬러\n2026 스페인",
+  "팀컬러\t강화 팀컬러\t소속 팀컬러\t스페인\t첼시\tFC 바르셀로나\tPath to Glory\t관계 팀컬러\t2026 스페인",
+);
+
 test("extracts named stats from rendered page text", () => {
   const stats = extractStatsFromPageText(pageText);
   assert.equal(stats.속력, 125);
@@ -240,6 +246,48 @@ test("uses embedded page HTML as a structured metadata fallback", () => {
   assert.deepEqual(result.positions, [
     { name: "LB", ovr: 116, primary: true },
   ]);
+});
+
+
+test("extracts team colors when Chromium flattens the section with tabs", () => {
+  const result = extractDatacenterMetadata({
+    spid: "863239231",
+    expected_player_name: "마르크 쿠쿠레야",
+    page_text: flattenedTeamColorPageText,
+    response_bodies: [],
+  });
+
+  assert.ok(result.team_colors.includes("스페인"));
+  assert.ok(result.team_colors.includes("첼시"));
+  assert.ok(result.team_colors.includes("Path to Glory"));
+  assert.ok(result.team_colors.includes("2026 스페인"));
+});
+
+test("falls back to page HTML when rendered text omits team colors", () => {
+  const pageWithoutTeamColors = renderedOnlyPageText.replace(
+    /팀컬러\n소속 팀컬러[\s\S]*?(?=속력 125)/,
+    "",
+  );
+  const result = extractDatacenterMetadata({
+    spid: "863239231",
+    expected_player_name: "마르크 쿠쿠레야",
+    page_text: pageWithoutTeamColors,
+    page_html: `
+      <section><h3>팀컬러</h3>
+        <div>강화 팀컬러</div>
+        <div>소속 팀컬러</div>
+        <ul><li>스페인</li><li>첼시</li><li>Path to Glory</li></ul>
+        <div>관계 팀컬러</div>
+        <ul><li>2026 스페인</li></ul>
+      </section>
+      <div>속력 125</div>`,
+    response_bodies: [],
+  });
+
+  assert.ok(result.team_colors.includes("스페인"));
+  assert.ok(result.team_colors.includes("첼시"));
+  assert.ok(result.team_colors.includes("Path to Glory"));
+  assert.ok(result.team_colors.includes("2026 스페인"));
 });
 
 test("rejects a mismatched player record", () => {

@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 
 import type { SeedCatalogDocument, SeedPlayer } from "../catalog/seed-catalog.ts";
 import {
@@ -42,6 +44,7 @@ interface PageLike {
   on(event: "response", handler: (response: ResponseLike) => void): void;
   goto(url: string, options?: Record<string, unknown>): Promise<ResponseLike | null>;
   content(): Promise<string>;
+  evaluate<R>(pageFunction: () => R | Promise<R>): Promise<R>;
   locator(selector: string): LocatorLike;
   getByText(text: string, options?: { exact?: boolean }): LocatorLike;
   waitForTimeout(ms: number): Promise<void>;
@@ -64,6 +67,7 @@ export interface DatacenterPlaywrightOptions {
   navigationTimeoutMs?: number;
   settleMs?: number;
   delayBetweenPlayersMs?: number;
+  debugDir?: string;
   launchBrowser?: () => Promise<BrowserLike>;
 }
 
@@ -118,7 +122,28 @@ function renderedMetadataReady(text: string, playerName: string): boolean {
   const hasSummary = /(?:^|\n)\s*\d{2,3}\s*\n\s*[A-Z]{1,4}\s*\n\s*\d{1,2}\s*(?:\n|$)/m.test(
     text,
   );
-  return hasPlayerName && (hasPositionOvr || hasSummary);
+  const hasTeamColors = /소속[\s\u00a0]*팀컬러/.test(text);
+  return hasPlayerName && (hasPositionOvr || hasSummary) && hasTeamColors;
+}
+
+async function primeLazySections(page: PageLike): Promise<void> {
+  try {
+    await page.evaluate(async () => {
+      const root = document.scrollingElement ?? document.documentElement;
+      const maxScroll = Math.max(
+        root?.scrollHeight ?? 0,
+        document.body?.scrollHeight ?? 0,
+      );
+      const step = Math.max(window.innerHeight || 800, 600);
+      for (let y = 0; y <= maxScroll; y += step) {
+        window.scrollTo(0, y);
+        await new Promise((resolve) => setTimeout(resolve, 75));
+      }
+      window.scrollTo(0, 0);
+    });
+  } catch {
+    // Lazy-section priming is best-effort; readiness polling still decides success.
+  }
 }
 
 async function waitForRenderedMetadata(
@@ -143,6 +168,48 @@ async function waitForRenderedMetadata(
   } while (Date.now() < deadline);
 
   return lastText;
+}
+
+function debugTimestamp(value: string): string {
+  return value.replace(/[:.]/g, "-");
+}
+
+async function writeDebugCapture(input: {
+  root: string;
+  seed: SeedPlayer;
+  observedAt: string;
+  pageUrl: string;
+  pageText: string;
+  pageRaw: Buffer;
+  responses: ObservedResponse[];
+}): Promise<string> {
+  const directory = join(
+    input.root,
+    input.observedAt.slice(0, 10),
+    `${input.seed.primary_instrument.spid}-g${input.seed.primary_instrument.grade}-${debugTimestamp(input.observedAt)}`,
+  );
+  await mkdir(directory, { recursive: true });
+  const responseIndex = input.responses.map((response, index) => ({
+    index: index + 1,
+    url: response.url,
+    status: response.status,
+    body_bytes: response.body.length,
+  }));
+  await Promise.all([
+    writeFile(join(directory, "page.html"), input.pageRaw),
+    writeFile(join(directory, "body.txt"), input.pageText),
+    writeFile(
+      join(directory, "responses.json"),
+      `${JSON.stringify({ page_url: input.pageUrl, responses: responseIndex }, null, 2)}\n`,
+    ),
+    ...input.responses.map((response, index) =>
+      writeFile(
+        join(directory, `response-${String(index + 1).padStart(2, "0")}.txt`),
+        response.body,
+      ),
+    ),
+  ]);
+  return directory;
 }
 
 async function trySelectLongestHistory(page: PageLike): Promise<void> {
@@ -267,13 +334,14 @@ async function captureSeed(
     await page.waitForTimeout(options.settleMs);
     await trySelectLongestHistory(page);
     await page.waitForTimeout(options.settleMs);
-    await Promise.allSettled([...pending]);
+    await primeLazySections(page);
 
     const pageText = await waitForRenderedMetadata(
       page,
       seed.player_name,
       options.navigationTimeoutMs,
     );
+    await Promise.allSettled([...pending]);
     detectAccessControl(page.url(), pageText);
     if (blockedStatus) {
       throw new Error(
@@ -300,9 +368,19 @@ async function captureSeed(
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      const debugPath = await writeDebugCapture({
+        root: options.debugDir,
+        seed,
+        observedAt,
+        pageUrl: page.url(),
+        pageText,
+        pageRaw,
+        responses,
+      }).catch(() => null);
       throw new TypeError(
         `${message}; page_url=${page.url()}; body_chars=${pageText.length}; ` +
-          `player_name_present=${pageText.includes(seed.player_name)}; responses=${responses.length}`,
+          `player_name_present=${pageText.includes(seed.player_name)}; responses=${responses.length}; ` +
+          `debug=${debugPath ?? "write_failed"}`,
       );
     }
 
@@ -334,6 +412,7 @@ export async function collectDatacenterWithPlaywright(
     navigationTimeoutMs: input.navigationTimeoutMs ?? 60_000,
     settleMs: input.settleMs ?? 1500,
     delayBetweenPlayersMs: input.delayBetweenPlayersMs ?? 2500,
+    debugDir: input.debugDir ?? "data/raw/debug/datacenter",
   };
   const launch = input.launchBrowser ?? (() => defaultLaunchBrowser(options.headless));
   const browser = await launch();

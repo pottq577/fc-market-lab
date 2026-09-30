@@ -406,33 +406,72 @@ function extractTraits(text: string): string[] {
   return traits.slice(0, 20);
 }
 
+const TEAM_COLOR_LABELS = new Set([
+  "팀컬러",
+  "강화 팀컬러",
+  "소속 팀컬러",
+  "관계 팀컬러",
+]);
+
+function teamColorSection(text: string): string | null {
+  const normalized = text.replace(/\r/g, "\n").replace(/\u00a0/g, " ");
+  const start = /(?:^|[\n\t])\s*팀컬러\s*(?=[\n\t]|$)/m.exec(normalized);
+  if (!start) {
+    return null;
+  }
+  const body = normalized.slice(start.index + start[0].length);
+  const endPatterns = [
+    /(?:^|[\n\t])\s*클래스\s*비교\s*(?=[\n\t]|$)/m,
+    /(?:^|[\n\t])\s*상위\s*랭커가/m,
+    /(?:^|[\n\t])\s*속력\s*(?:[\n\t:]|\d)/m,
+  ];
+  let end = body.length;
+  for (const pattern of endPatterns) {
+    const match = pattern.exec(body);
+    if (match && match.index < end) {
+      end = match.index;
+    }
+  }
+  return body.slice(0, end);
+}
+
 function teamColorsFromPage(text: string): string[] {
-  const lines = pageLines(text);
-  const start = lines.findIndex((line) => line === "소속 팀컬러");
-  if (start < 0) {
+  const section = teamColorSection(text);
+  if (!section) {
     return [];
   }
-  const knownStats = new Set<string>(STAT_NAMES);
+
   const result: string[] = [];
-  for (let index = start + 1; index < lines.length; index += 1) {
-    const line = lines[index]!;
-    if (knownStats.has(line) || line === "클래스 비교" || line.startsWith("상위 랭커가")) {
-      break;
-    }
+  const tokens = section
+    .split(/(?:\n+|\t+|[•·]\s*|\s{2,})/)
+    .map(cleanPageLine)
+    .filter(Boolean);
+  for (const token of tokens) {
     if (
-      line === "소속 팀컬러" ||
-      line === "관계 팀컬러" ||
-      line === "강화 팀컬러" ||
-      /^Lv\./i.test(line) ||
-      /^[-+]?\d+(?:\.\d+)?$/.test(line)
+      TEAM_COLOR_LABELS.has(token) ||
+      /^Lv\./i.test(token) ||
+      /^[-+]?\d+(?:\.\d+)?$/.test(token)
     ) {
       continue;
     }
-    if (!result.includes(line)) {
-      result.push(line);
+    if (!result.includes(token)) {
+      result.push(token);
     }
   }
   return result;
+}
+
+function visibleTextFromHtml(html: string): string {
+  return html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(?:li|div|p|span|a|button|dt|dd|ul|ol|section|article|h[1-6])>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;|&#160;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">");
 }
 
 export function extractDatacenterMetadata(input: {
@@ -485,9 +524,13 @@ export function extractDatacenterMetadata(input: {
   }
 
   const affiliations = extractAffiliations(input.page_text);
+  const teamColorSources = [
+    input.page_text,
+    ...(input.page_html ? [visibleTextFromHtml(input.page_html)] : []),
+  ];
   const teamColors = [
     ...teamColorsFromRecord(record),
-    ...teamColorsFromPage(input.page_text),
+    ...teamColorSources.flatMap(teamColorsFromPage),
   ].filter((value, index, values) => value && values.indexOf(value) === index);
   if (affiliations.nations.length === 0) {
     throw new TypeError(`no Data Center nation found for spid=${input.spid}`);
