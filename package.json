@@ -13,5 +13,8 @@
     "collect:price": "node --experimental-strip-types src/cli/collect-datacenter-price.ts",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "check": "npm test && npm run gate:0a"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3"
   }
 }
