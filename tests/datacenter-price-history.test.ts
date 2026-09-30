@@ -9,6 +9,7 @@ import {
 } from "../src/evidence/datacenter-price-history.ts";
 
 const fixturePath = "tests/fixtures/datacenter-player-price-graph.html";
+const json1FixturePath = "tests/fixtures/datacenter-player-price-graph-json1.html";
 
 test("parses timestamped market-reference price points from a saved graph response", async () => {
   const raw = await readFile(fixturePath, "utf8");
@@ -22,6 +23,18 @@ test("parses timestamped market-reference price points from a saved graph respon
   ]);
 });
 
+test("parses the official json1 time/value format with trailing commas", async () => {
+  const raw = await readFile(json1FixturePath, "utf8");
+  const points = parseDatacenterPriceGraph(raw, "2026-01-03T09:00:00+09:00");
+
+  assert.deepEqual(points, [
+    { source_timestamp_ms: Date.UTC(2025, 11, 30), value: 1000000 },
+    { source_timestamp_ms: Date.UTC(2025, 11, 31), value: 1100000 },
+    { source_timestamp_ms: Date.UTC(2026, 0, 1), value: 1050000 },
+    { source_timestamp_ms: Date.UTC(2026, 0, 2), value: 1200000 },
+  ]);
+});
+
 test("infers the native cadence even when one daily observation is missing", async () => {
   const raw = await readFile(fixturePath, "utf8");
   const points = parseDatacenterPriceGraph(raw);
@@ -29,7 +42,7 @@ test("infers the native cadence even when one daily observation is missing", asy
   assert.equal(inferNativeGranularity(points), "P1D");
 });
 
-test("builds deterministic Gate evidence from the saved raw response", async () => {
+test("builds deterministic Gate evidence from the timestamped response", async () => {
   const raw = await readFile(fixturePath, "utf8");
   const evidence = buildDatacenterPriceCaptureEvidence({
     raw,
@@ -45,15 +58,41 @@ test("builds deterministic Gate evidence from the saved raw response", async () 
   assert.match(evidence.raw_sha256, /^sha256:[0-9a-f]{64}$/);
   assert.deepEqual(evidence.gate_update, {
     native_granularity: "P1D",
-    history_span: "4D_OBSERVED",
+    history_span: "4_POINTS_4D_SPAN",
     evidence_hash: evidence.raw_sha256,
   });
 });
 
-test("rejects responses without chartData", () => {
+test("builds deterministic Gate evidence from the official json1 response shape", async () => {
+  const raw = await readFile(json1FixturePath, "utf8");
+  const evidence = buildDatacenterPriceCaptureEvidence({
+    raw,
+    spid: "851224371",
+    grade: 1,
+    observed_at: "2026-01-03T09:00:00+09:00",
+  });
+
+  assert.equal(evidence.point_count, 4);
+  assert.equal(evidence.first_source_date, "2025-12-30");
+  assert.equal(evidence.last_source_date, "2026-01-02");
+  assert.equal(evidence.observed_span_days, 3);
+  assert.equal(evidence.native_granularity, "P1D");
+  assert.equal(evidence.gate_update.history_span, "4_POINTS_3D_SPAN");
+});
+
+test("requires observed_at when json1 only provides month/day labels", async () => {
+  const raw = await readFile(json1FixturePath, "utf8");
+
+  assert.throws(
+    () => parseDatacenterPriceGraph(raw),
+    /observed_at is required/,
+  );
+});
+
+test("rejects responses without supported graph assignments", () => {
   assert.throws(
     () => parseDatacenterPriceGraph("<html></html>"),
-    /does not contain a JSON chartData assignment/,
+    /supported price graph assignment/,
   );
 });
 

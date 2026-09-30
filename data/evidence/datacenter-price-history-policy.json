@@ -16,7 +16,7 @@
   ],
   "decision": {
     "price_semantics": "MARKET_REFERENCE_PRICE",
-    "history_span": "365D_UI_AVAILABLE",
+    "history_span": "365_POINTS_364D_SPAN",
     "automation_decision": "MANUAL_ONLY",
     "reason": "Use the intended public UI and manually capture one graph response for Gate evidence. Do not implement a recurring collector until automated access is explicitly authorized."
   },
@@ -35,8 +35,13 @@
     "candidate_url": "https://m.fconline.nexon.com/datacenter/PlayerPriceGraph",
     "use": "Use only to locate the corresponding request in browser DevTools. This URL is not policy evidence and the repository must not call it automatically while Gate 0A is manual-only."
   },
-  "unresolved": [
-    "native_granularity",
-    "raw_response_evidence_hash"
-  ]
+  "unresolved": [],
+  "verified_capture": {
+    "evidence_record": "data/evidence/datacenter-price-history-capture.json",
+    "point_count": 365,
+    "first_source_date": "2025-09-30",
+    "last_source_date": "2026-09-29",
+    "native_granularity": "P1D",
+    "raw_sha256": "sha256:6ec978cc2bcf18e9a9686766552e7d3e3ebb98e14609ec63a14fe29b11e864de"
+  }
 }

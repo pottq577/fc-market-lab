@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "source_id": "fconline-datacenter-price-history",
+  "capture_method": "OFFICIAL_WEB_UI_MANUAL_CAPTURE",
+  "spid": "851224371",
+  "grade": 1,
+  "observed_at": "2026-09-30T09:08:00+09:00",
+  "response_shape": "var json1 = { time: M.DD[], value: numeric-string[] }",
+  "raw_sha256": "sha256:6ec978cc2bcf18e9a9686766552e7d3e3ebb98e14609ec63a14fe29b11e864de",
+  "point_count": 365,
+  "first_source_date": "2025-09-30",
+  "last_source_date": "2026-09-29",
+  "observed_span_days": 364,
+  "native_granularity": "P1D",
+  "price_semantics": "MARKET_REFERENCE_PRICE",
+  "raw_committed": false,
+  "raw_storage": "data/raw/manual (gitignored)"
+}

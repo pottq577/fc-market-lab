@@ -12,6 +12,8 @@ export interface DatacenterPriceCaptureEvidence {
   observed_at: string;
   raw_sha256: string;
   point_count: number;
+  first_source_date: string;
+  last_source_date: string;
   first_source_timestamp: string;
   last_source_timestamp: string;
   observed_span_days: number;
@@ -27,6 +29,7 @@ export interface DatacenterPriceCaptureEvidence {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
+const KST_TIME_ZONE = "Asia/Seoul";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -47,30 +50,116 @@ function gcdAll(values: number[]): number {
   return values.reduce((result, value) => gcd(result, value));
 }
 
-function readFiniteNumber(value: unknown, context: string): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    throw new TypeError(`${context} must be a finite number`);
+function readPositiveInteger(value: unknown, context: string): number {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && /^\d+$/.test(value.trim())
+        ? Number(value)
+        : Number.NaN;
+
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new TypeError(`${context} must be a positive integer`);
   }
-  return value;
+  return parsed;
 }
 
-function extractChartData(raw: string): unknown {
-  const match = raw.match(/var\s+chartData\s*=\s*(\{[\s\S]*?\})\s*;/);
-  if (!match?.[1]) {
-    throw new TypeError("response does not contain a JSON chartData assignment");
+function extractAssignedObject(raw: string, variableName: string): string | null {
+  const assignment = new RegExp(`\\bvar\\s+${variableName}\\s*=\\s*`).exec(raw);
+  if (!assignment) {
+    return null;
   }
 
+  const objectStart = raw.indexOf("{", assignment.index + assignment[0].length);
+  if (objectStart < 0) {
+    throw new TypeError(`${variableName} assignment does not contain an object`);
+  }
+
+  let depth = 0;
+  let quote: '"' | "'" | null = null;
+  let escaped = false;
+
+  for (let index = objectStart; index < raw.length; index += 1) {
+    const char = raw[index];
+
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === "{") {
+      depth += 1;
+      continue;
+    }
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return raw.slice(objectStart, index + 1);
+      }
+    }
+  }
+
+  throw new TypeError(`${variableName} assignment has an unterminated object`);
+}
+
+function parseAssignedObject(
+  raw: string,
+  variableName: string,
+  allowTrailingCommas = false,
+): unknown | null {
+  const objectText = extractAssignedObject(raw, variableName);
+  if (objectText === null) {
+    return null;
+  }
+
+  const normalized = allowTrailingCommas
+    ? objectText.replace(/,\s*([}\]])/g, "$1")
+    : objectText;
+
   try {
-    return JSON.parse(match[1]);
+    return JSON.parse(normalized);
   } catch (error) {
     throw new TypeError(
-      `chartData must be valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+      `${variableName} must be JSON-compatible: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 }
 
-export function parseDatacenterPriceGraph(raw: string): PricePoint[] {
-  const chartData = extractChartData(raw);
+function finalizePoints(points: PricePoint[]): PricePoint[] {
+  if (points.length < 2) {
+    throw new TypeError("price graph must contain at least two points");
+  }
+
+  const sorted = [...points].sort(
+    (left, right) => left.source_timestamp_ms - right.source_timestamp_ms,
+  );
+  for (let index = 1; index < sorted.length; index += 1) {
+    const previous = sorted[index - 1];
+    const current = sorted[index];
+    if (!previous || !current) {
+      continue;
+    }
+    if (previous.source_timestamp_ms === current.source_timestamp_ms) {
+      throw new TypeError(
+        `price graph contains duplicate timestamp ${current.source_timestamp_ms}`,
+      );
+    }
+  }
+
+  return sorted;
+}
+
+function parseTimestampedChartData(chartData: unknown): PricePoint[] {
   if (!isRecord(chartData) || !Array.isArray(chartData.datasets)) {
     throw new TypeError("chartData.datasets must be an array");
   }
@@ -85,46 +174,183 @@ export function parseDatacenterPriceGraph(raw: string): PricePoint[] {
       throw new TypeError(`chartData.datasets[0].data[${index}] must be an object`);
     }
 
-    const sourceTimestampMs = readFiniteNumber(
+    const sourceTimestampMs = readPositiveInteger(
       entry.x,
       `chartData.datasets[0].data[${index}].x`,
     );
-    const value = readFiniteNumber(
+    const value = readPositiveInteger(
       entry.y,
       `chartData.datasets[0].data[${index}].y`,
     );
 
-    if (!Number.isInteger(sourceTimestampMs) || sourceTimestampMs <= 0) {
-      throw new TypeError(
-        `chartData.datasets[0].data[${index}].x must be a positive epoch-millisecond integer`,
-      );
-    }
-    if (!Number.isInteger(value) || value <= 0) {
-      throw new TypeError(
-        `chartData.datasets[0].data[${index}].y must be a positive integer price`,
-      );
-    }
-
     return { source_timestamp_ms: sourceTimestampMs, value };
   });
 
-  if (points.length < 2) {
-    throw new TypeError("price graph must contain at least two points");
+  return finalizePoints(points);
+}
+
+function parseMonthDay(value: unknown, context: string): { month: number; day: number } {
+  if (typeof value !== "string") {
+    throw new TypeError(`${context} must be an M.DD date label`);
   }
 
-  points.sort((a, b) => a.source_timestamp_ms - b.source_timestamp_ms);
-  for (let index = 1; index < points.length; index += 1) {
-    if (
-      points[index - 1]?.source_timestamp_ms ===
-      points[index]?.source_timestamp_ms
-    ) {
-      throw new TypeError(
-        `price graph contains duplicate timestamp ${points[index]?.source_timestamp_ms}`,
-      );
+  const match = /^(\d{1,2})\.(\d{2})$/.exec(value.trim());
+  if (!match) {
+    throw new TypeError(`${context} must be an M.DD date label`);
+  }
+
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    throw new TypeError(`${context} is not a valid month/day label`);
+  }
+  return { month, day };
+}
+
+function calendarDateMs(year: number, month: number, day: number, context: string): number {
+  const timestamp = Date.UTC(year, month - 1, day);
+  const date = new Date(timestamp);
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() + 1 !== month ||
+    date.getUTCDate() !== day
+  ) {
+    throw new TypeError(`${context} is not a valid calendar date`);
+  }
+  return timestamp;
+}
+
+function kstCalendarDate(observedAt: string): { year: number; month: number; day: number } {
+  const parsed = new Date(observedAt);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new TypeError("observed_at must be an ISO-8601-compatible timestamp");
+  }
+
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: KST_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(parsed);
+  const byType = new Map(parts.map((part) => [part.type, part.value]));
+
+  return {
+    year: Number(byType.get("year")),
+    month: Number(byType.get("month")),
+    day: Number(byType.get("day")),
+  };
+}
+
+function resolveDateLabels(labels: unknown[], observedAt: string): number[] {
+  if (labels.length < 2) {
+    throw new TypeError("json1.time must contain at least two date labels");
+  }
+
+  const parsedLabels = labels.map((label, index) =>
+    parseMonthDay(label, `json1.time[${index}]`),
+  );
+
+  for (let index = 1; index < labels.length; index += 1) {
+    if (labels[index] === labels[index - 1]) {
+      throw new TypeError(`json1.time contains duplicate adjacent label ${String(labels[index])}`);
     }
   }
 
-  return points;
+  const observed = kstCalendarDate(observedAt);
+  const observedDateMs = calendarDateMs(
+    observed.year,
+    observed.month,
+    observed.day,
+    "observed_at",
+  );
+
+  const resolved = new Array<number>(parsedLabels.length);
+  const lastIndex = parsedLabels.length - 1;
+  const last = parsedLabels[lastIndex];
+  if (!last) {
+    throw new TypeError("json1.time must contain date labels");
+  }
+
+  let lastYear = observed.year;
+  let lastTimestamp = calendarDateMs(lastYear, last.month, last.day, `json1.time[${lastIndex}]`);
+  if (lastTimestamp > observedDateMs) {
+    lastYear -= 1;
+    lastTimestamp = calendarDateMs(
+      lastYear,
+      last.month,
+      last.day,
+      `json1.time[${lastIndex}]`,
+    );
+  }
+  resolved[lastIndex] = lastTimestamp;
+
+  for (let index = lastIndex - 1; index >= 0; index -= 1) {
+    const current = parsedLabels[index];
+    const nextTimestamp = resolved[index + 1];
+    if (!current || nextTimestamp === undefined) {
+      throw new TypeError("failed to resolve json1 date labels");
+    }
+
+    const nextYear = new Date(nextTimestamp).getUTCFullYear();
+    let candidateYear = nextYear;
+    let candidate = calendarDateMs(
+      candidateYear,
+      current.month,
+      current.day,
+      `json1.time[${index}]`,
+    );
+    if (candidate >= nextTimestamp) {
+      candidateYear -= 1;
+      candidate = calendarDateMs(
+        candidateYear,
+        current.month,
+        current.day,
+        `json1.time[${index}]`,
+      );
+    }
+    resolved[index] = candidate;
+  }
+
+  return resolved;
+}
+
+function parseLabeledJson1(json1: unknown, observedAt: string): PricePoint[] {
+  if (!isRecord(json1) || !Array.isArray(json1.time) || !Array.isArray(json1.value)) {
+    throw new TypeError("json1.time and json1.value must be arrays");
+  }
+  if (json1.time.length !== json1.value.length) {
+    throw new TypeError("json1.time and json1.value must have the same length");
+  }
+
+  const timestamps = resolveDateLabels(json1.time, observedAt);
+  const points = timestamps.map((sourceTimestampMs, index): PricePoint => ({
+    source_timestamp_ms: sourceTimestampMs,
+    value: readPositiveInteger(json1.value[index], `json1.value[${index}]`),
+  }));
+
+  return finalizePoints(points);
+}
+
+export function parseDatacenterPriceGraph(
+  raw: string,
+  observedAt?: string,
+): PricePoint[] {
+  const chartData = parseAssignedObject(raw, "chartData");
+  if (chartData !== null) {
+    return parseTimestampedChartData(chartData);
+  }
+
+  const json1 = parseAssignedObject(raw, "json1", true);
+  if (json1 !== null) {
+    if (!observedAt) {
+      throw new TypeError("observed_at is required for json1 M.DD date labels");
+    }
+    return parseLabeledJson1(json1, observedAt);
+  }
+
+  throw new TypeError(
+    "response does not contain a supported price graph assignment (chartData or json1)",
+  );
 }
 
 export function inferNativeGranularity(points: PricePoint[]): string {
@@ -177,6 +403,10 @@ function assertObservedAt(observedAt: string): void {
   }
 }
 
+function sourceDate(timestampMs: number): string {
+  return new Date(timestampMs).toISOString().slice(0, 10);
+}
+
 export function buildDatacenterPriceCaptureEvidence(input: {
   raw: string;
   spid: string;
@@ -187,7 +417,7 @@ export function buildDatacenterPriceCaptureEvidence(input: {
   assertGrade(input.grade);
   assertObservedAt(input.observed_at);
 
-  const points = parseDatacenterPriceGraph(input.raw);
+  const points = parseDatacenterPriceGraph(input.raw, input.observed_at);
   const first = points[0];
   const last = points.at(-1);
   if (!first || !last) {
@@ -206,6 +436,8 @@ export function buildDatacenterPriceCaptureEvidence(input: {
     observed_at: input.observed_at,
     raw_sha256: rawSha256,
     point_count: points.length,
+    first_source_date: sourceDate(first.source_timestamp_ms),
+    last_source_date: sourceDate(last.source_timestamp_ms),
     first_source_timestamp: new Date(first.source_timestamp_ms).toISOString(),
     last_source_timestamp: new Date(last.source_timestamp_ms).toISOString(),
     observed_span_days: Number(spanDays.toFixed(3)),
@@ -213,7 +445,7 @@ export function buildDatacenterPriceCaptureEvidence(input: {
     price_semantics: "MARKET_REFERENCE_PRICE",
     gate_update: {
       native_granularity: granularity,
-      history_span: `${Number(spanDays.toFixed(3))}D_OBSERVED`,
+      history_span: `${points.length}_POINTS_${Number(spanDays.toFixed(3))}D_SPAN`,
       evidence_hash: rawSha256,
     },
   };

@@ -22,12 +22,12 @@
       "policy_url": "https://member.nexon.com/policy/policywrapper.aspx?policyType=12",
       "policy_checked_at": "2026-09-29T16:20:00+09:00",
       "access_method": "OFFICIAL_WEB_UI_MANUAL_CAPTURE",
-      "native_granularity": "UNKNOWN",
-      "history_span": "365D_UI_AVAILABLE",
+      "native_granularity": "P1D",
+      "history_span": "365_POINTS_364D_SPAN",
       "price_semantics": "MARKET_REFERENCE_PRICE",
       "automation_decision": "MANUAL_ONLY",
-      "decision_reason": "The official Data Center UI exposes 7/30/90/180/365-day market-price windows. The current NEXON integrated service terms apply to service use but do not explicitly authorize automated extraction, so this PoC limits the source to manual browser capture. Native granularity and the raw response evidence hash still need to be measured from one saved PlayerPriceGraph response.",
-      "evidence_hash": "UNKNOWN"
+      "decision_reason": "The official Data Center UI exposes market-price history and the manually captured PlayerPriceGraph response contains 365 daily observations from 2025-09-30 through 2026-09-29. The current NEXON integrated service terms do not explicitly authorize automated extraction, so this PoC keeps the source manual-only.",
+      "evidence_hash": "sha256:6ec978cc2bcf18e9a9686766552e7d3e3ebb98e14609ec63a14fe29b11e864de"
     }
   ]
 }

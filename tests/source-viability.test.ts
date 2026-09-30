@@ -86,24 +86,21 @@ test("rejects duplicate source ids", () => {
   );
 });
 
-test("current Gate 0A evidence is manual-only but still blocked on raw graph evidence", async () => {
+test("current Gate 0A evidence is ready for manual price-history collection", async () => {
   const raw = await readFile("data/evidence/source-viability.json", "utf8");
   const document = parseSourceViabilityDocument(JSON.parse(raw));
   const result = evaluateGate0A(document);
 
-  assert.equal(result.status, "BLOCKED");
+  assert.equal(result.status, "READY_MANUAL");
   assert.deepEqual(
     result.sources.map((source) => [source.source_id, source.status]),
     [
       ["nexon-open-api-fconline-price-history", "REJECTED"],
-      ["fconline-datacenter-price-history", "INCOMPLETE"],
+      ["fconline-datacenter-price-history", "READY_MANUAL"],
     ],
   );
 
   const datacenter = result.sources[1];
   assert.equal(datacenter?.automation_decision, "MANUAL_ONLY");
-  assert.deepEqual(datacenter?.blockers, [
-    "native_granularity=UNKNOWN",
-    "evidence_hash=UNKNOWN",
-  ]);
+  assert.deepEqual(datacenter?.blockers, []);
 });
