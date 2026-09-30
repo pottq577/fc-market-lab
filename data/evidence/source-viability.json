@@ -18,15 +18,15 @@
     {
       "source_id": "fconline-datacenter-price-history",
       "purpose": "PRICE_HISTORY",
-      "source_url": "https://fconline.nexon.com/DataCenter",
-      "policy_url": "UNKNOWN",
+      "source_url": "https://fconline.nexon.com/DataCenter/PlayerInfo",
+      "policy_url": "https://member.nexon.com/policy/policywrapper.aspx?policyType=12",
       "policy_checked_at": "2026-09-29T16:20:00+09:00",
-      "access_method": "OFFICIAL_WEB_UI",
+      "access_method": "OFFICIAL_WEB_UI_MANUAL_CAPTURE",
       "native_granularity": "UNKNOWN",
-      "history_span": "UNKNOWN",
-      "price_semantics": "UNKNOWN",
-      "automation_decision": "UNKNOWN",
-      "decision_reason": "The official Data Center exposes player and market-related data, but the allowed automation/storage policy and a reproducible machine-readable 180-365 day price-history path have not yet been verified.",
+      "history_span": "365D_UI_AVAILABLE",
+      "price_semantics": "MARKET_REFERENCE_PRICE",
+      "automation_decision": "MANUAL_ONLY",
+      "decision_reason": "The official Data Center UI exposes 7/30/90/180/365-day market-price windows. The current NEXON integrated service terms apply to service use but do not explicitly authorize automated extraction, so this PoC limits the source to manual browser capture. Native granularity and the raw response evidence hash still need to be measured from one saved PlayerPriceGraph response.",
       "evidence_hash": "UNKNOWN"
     }
   ]

@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "source_id": "fconline-datacenter-price-history",
+  "checked_at": "2026-09-29T16:20:00+09:00",
+  "official_sources": [
+    {
+      "kind": "PLAYER_INFO_UI",
+      "url": "https://fconline.nexon.com/DataCenter/PlayerInfo?n1Strong=1&spid=851224371",
+      "finding": "The official player page labels the graph as market price and exposes 7, 30, 90, 180, and 365 day windows plus current, high, and low BP values."
+    },
+    {
+      "kind": "NEXON_INTEGRATED_TERMS",
+      "url": "https://member.nexon.com/policy/policywrapper.aspx?policyType=12",
+      "finding": "The terms govern service use and restrict unapproved commercial use of information obtained from the service. No explicit authorization for automated Data Center extraction was identified during this review."
+    }
+  ],
+  "decision": {
+    "price_semantics": "MARKET_REFERENCE_PRICE",
+    "history_span": "365D_UI_AVAILABLE",
+    "automation_decision": "MANUAL_ONLY",
+    "reason": "Use the intended public UI and manually capture one graph response for Gate evidence. Do not implement a recurring collector until automated access is explicitly authorized."
+  },
+  "manual_capture": {
+    "target_request_hint": "PlayerPriceGraph",
+    "steps": [
+      "Open an official Data Center player detail page in a browser.",
+      "Open DevTools Network and filter for PlayerPriceGraph.",
+      "Select the 365-day market-price window if the request is window-dependent.",
+      "Save the response body as a local text or HTML file without editing it.",
+      "Run npm run evidence:datacenter-price -- <file> --spid <spid> --grade <grade>."
+    ]
+  },
+  "technical_hint": {
+    "status": "UNVERIFIED_THIRD_PARTY_HINT",
+    "candidate_url": "https://m.fconline.nexon.com/datacenter/PlayerPriceGraph",
+    "use": "Use only to locate the corresponding request in browser DevTools. This URL is not policy evidence and the repository must not call it automatically while Gate 0A is manual-only."
+  },
+  "unresolved": [
+    "native_granularity",
+    "raw_response_evidence_hash"
+  ]
+}

@@ -9,6 +9,7 @@
   "scripts": {
     "gate:0a": "node --experimental-strip-types src/cli/gate-0a.ts data/evidence/source-viability.json",
     "gate:0a:require-ready": "node --experimental-strip-types src/cli/gate-0a.ts data/evidence/source-viability.json --require-ready",
+    "evidence:datacenter-price": "node --experimental-strip-types src/cli/datacenter-price-evidence.ts",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "check": "npm test && npm run gate:0a"
   }

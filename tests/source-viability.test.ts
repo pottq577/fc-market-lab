@@ -86,7 +86,7 @@ test("rejects duplicate source ids", () => {
   );
 });
 
-test("current Gate 0A evidence remains blocked until price source is verified", async () => {
+test("current Gate 0A evidence is manual-only but still blocked on raw graph evidence", async () => {
   const raw = await readFile("data/evidence/source-viability.json", "utf8");
   const document = parseSourceViabilityDocument(JSON.parse(raw));
   const result = evaluateGate0A(document);
@@ -99,4 +99,11 @@ test("current Gate 0A evidence remains blocked until price source is verified", 
       ["fconline-datacenter-price-history", "INCOMPLETE"],
     ],
   );
+
+  const datacenter = result.sources[1];
+  assert.equal(datacenter?.automation_decision, "MANUAL_ONLY");
+  assert.deepEqual(datacenter?.blockers, [
+    "native_granularity=UNKNOWN",
+    "evidence_hash=UNKNOWN",
+  ]);
 });
