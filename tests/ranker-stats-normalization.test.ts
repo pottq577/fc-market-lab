@@ -57,7 +57,7 @@ function seedCard(db: ReturnType<typeof openMarketDatabase>, spid = "863239231")
 
 function responseRow(spid = 863239231, position = 3) {
   return {
-    spId: spid,
+    spid,
     spPosition: position,
     status: {
       shoot: 0.2,
@@ -219,7 +219,7 @@ test("normalizes numeric-string ranker fields at the API boundary", async () => 
         JSON.stringify([
           {
             ...row,
-            spId: String(row.spId),
+            spid: String(row.spid),
             spPosition: String(row.spPosition),
             status: Object.fromEntries(
               Object.entries(row.status).map(([key, value]) => [key, String(value)]),

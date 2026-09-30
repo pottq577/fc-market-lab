@@ -87,6 +87,35 @@ function integerField(
   return value;
 }
 
+function aliasedIntegerField(
+  record: Record<string, unknown>,
+  primaryKey: string,
+  aliasKey: string,
+  context: string,
+  minimum: number,
+): number {
+  const hasPrimary = Object.hasOwn(record, primaryKey);
+  const hasAlias = Object.hasOwn(record, aliasKey);
+  if (!hasPrimary && !hasAlias) {
+    throw new TypeError(
+      `${context}.${primaryKey} or ${context}.${aliasKey} is required`,
+    );
+  }
+
+  const primary = hasPrimary
+    ? integerField(record, primaryKey, context, minimum)
+    : undefined;
+  const alias = hasAlias
+    ? integerField(record, aliasKey, context, minimum)
+    : undefined;
+  if (primary !== undefined && alias !== undefined && primary !== alias) {
+    throw new TypeError(
+      `${context}.${primaryKey} and ${context}.${aliasKey} must match`,
+    );
+  }
+  return primary ?? alias!;
+}
+
 function numberField(
   record: Record<string, unknown>,
   key: keyof RankerStatus,
@@ -114,7 +143,7 @@ function parseRows(artifact: RankerStatsArtifact): RankerRow[] {
     if (!isRecord(item)) {
       throw new TypeError(`${context} must be an object`);
     }
-    const spId = integerField(item, "spId", context, 1);
+    const spId = aliasedIntegerField(item, "spid", "spId", context, 1);
     const spPosition = integerField(item, "spPosition", context, 0);
     if (!isRecord(item.status)) {
       throw new TypeError(`${context}.status must be an object`);
