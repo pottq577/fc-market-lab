@@ -12,6 +12,8 @@
     "evidence:datacenter-price": "node --experimental-strip-types src/cli/datacenter-price-evidence.ts",
     "collect:price": "node --experimental-strip-types src/cli/collect-datacenter-price.ts",
     "ingest:price": "node --experimental-strip-types src/cli/ingest-price-history.ts",
+    "collect:metadata": "node --experimental-strip-types src/cli/collect-openapi-metadata.ts",
+    "ingest:metadata-usage": "node --experimental-strip-types src/cli/ingest-metadata-usage.ts",
     "catalog:check": "node --experimental-strip-types src/cli/seed-catalog.ts data/catalog/seed-catalog.json",
     "catalog:targets": "node --experimental-strip-types src/cli/seed-catalog.ts data/catalog/seed-catalog.json --targets",
     "test": "node --experimental-strip-types --test tests/*.test.ts",

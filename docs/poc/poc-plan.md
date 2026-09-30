@@ -118,8 +118,8 @@ PoC는 다음 acceptance criteria를 모두 충족하면 1차 완료로 본다.
 - Gate 0A evidence에 source, policy URL, 검토 시각, access method, price semantics, automation decision이 기록돼 있다
 - seed player가 20–30명이며 각 player에 primary instrument와 선정 근거가 있다
 - primary instrument가 source-native expected observation 기준 90% 이상 coverage를 가진다. 출시 후 180일 이상 지난 instrument는 최소 180일 history를 요구하고, 더 새로운 instrument는 공식 출시일부터 최신 observation까지의 full-lifetime coverage를 요구한다. 365개 observation은 목표값으로 별도 표시한다
-- 가격과 metadata가 instrument identity로 연결되고 source snapshot까지 역추적된다
-- 사용 데이터가 확보 가능한 경우 최소 5명 seed player와 10개 instrument에 usage observation이 연결된다. source 자체가 과거 usage를 제공하지 않으면 `UNAVAILABLE_SOURCE` evidence로 대체한다
+- 가격과 metadata가 `spid`와 instrument identity를 통해 연결되고 source snapshot까지 역추적된다
+- 사용 데이터가 확보 가능한 경우 최소 5명 seed player와 10개 card 또는 instrument에 usage observation이 연결된다. Source가 grade를 제공하지 않으면 card 단위로 저장한다. 과거 usage를 제공하지 않으면 `UNAVAILABLE_SOURCE` evidence로 대체한다
 - 동일 선수 relation, 팀컬러 대체 relation, cohort membership이 시간 유효성과 함께 조회된다
 - `SAMPLE_MARKET`, `CORE`, `PACK_EXPOSED`, `PREMIUM_SCARCE`에 대해 데이터 충분성 기준을 적용한 index와 relative strength를 계산할 수 있다
 - 라커룸 토크 11화 replay가 `announced_at` 기준 window와 비교군 결과를 생성한다

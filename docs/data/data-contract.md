@@ -88,6 +88,14 @@ Gate 0A 통과가 표본 coverage를 보장하지 않기 때문에 별도 단계
 
 Gate 0B 통과는 모든 분석 window의 계산 가능성을 보장하지 않는다. 각 metric과 replay는 자체 데이터 충분성 기준을 적용한다. 기준 미달이면 `NO_RESULT`를 반환한다.
 
+## Open API metadata와 usage의 범위를 보존한다
+
+NEXON Open API의 정적 metadata는 `spid`, 시즌, 포지션 코드 같은 공식 식별 정보를 제공한다. 이 source가 제공하지 않는 급여, OVR, 세부 능력치, 특성, 팀컬러는 빈 값을 추정하지 않고 별도 Data Center evidence를 기다린다.
+
+Open API를 통해 수집한 데이터는 현행 고지에 따라 30일 안에 갱신한다. Raw JSON과 `observed_at`을 함께 저장해 어떤 metadata revision을 사용했는지 추적한다.
+
+Daily Chart와 Open API ranker stats는 강화단계를 식별하지 않는다. 이런 usage observation은 `spid` 기준 `PLAYER_CARD`에 연결하고 grade별 instrument 사용량으로 변환하지 않는다.
+
 ## 가격 데이터 의미를 보존한다
 
 가격 graph 값을 실제 체결가로 단정하지 않는다.

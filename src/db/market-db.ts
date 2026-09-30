@@ -3,9 +3,52 @@ import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 export const PRICE_HISTORY_SCHEMA_VERSION = 1;
+export const MARKET_SCHEMA_VERSION = 2;
 
 export interface OpenMarketDatabaseOptions {
   migrationPath?: string;
+  migrationPaths?: Partial<Record<number, string>>;
+}
+
+const DEFAULT_MIGRATION_PATHS: Record<number, string> = {
+  1: "db/migrations/001_price_history.sql",
+  2: "db/migrations/002_metadata_usage.sql",
+};
+
+function migrationPathFor(
+  version: number,
+  options: OpenMarketDatabaseOptions,
+): string {
+  if (version === 1 && options.migrationPath) {
+    return options.migrationPath;
+  }
+  return options.migrationPaths?.[version] ?? DEFAULT_MIGRATION_PATHS[version]!;
+}
+
+function applyMigration(
+  db: DatabaseSync,
+  version: number,
+  path: string,
+): void {
+  const applied = db
+    .prepare("SELECT 1 AS applied FROM schema_migration WHERE version = ?")
+    .get(version);
+  if (applied) {
+    return;
+  }
+
+  const migrationSql = readFileSync(path, "utf8");
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.exec(migrationSql);
+    db.prepare(
+      "INSERT INTO schema_migration(version, applied_at) VALUES (?, ?)",
+    ).run(version, new Date().toISOString());
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
 }
 
 export function openMarketDatabase(
@@ -26,26 +69,11 @@ export function openMarketDatabase(
     ) STRICT;
   `);
 
-  const applied = db
-    .prepare("SELECT 1 AS applied FROM schema_migration WHERE version = ?")
-    .get(PRICE_HISTORY_SCHEMA_VERSION);
-  if (applied) {
-    return db;
-  }
-
-  const migrationPath =
-    options.migrationPath ?? "db/migrations/001_price_history.sql";
-  const migrationSql = readFileSync(migrationPath, "utf8");
-
-  db.exec("BEGIN IMMEDIATE");
   try {
-    db.exec(migrationSql);
-    db.prepare(
-      "INSERT INTO schema_migration(version, applied_at) VALUES (?, ?)",
-    ).run(PRICE_HISTORY_SCHEMA_VERSION, new Date().toISOString());
-    db.exec("COMMIT");
+    for (let version = 1; version <= MARKET_SCHEMA_VERSION; version += 1) {
+      applyMigration(db, version, migrationPathFor(version, options));
+    }
   } catch (error) {
-    db.exec("ROLLBACK");
     db.close();
     throw error;
   }
@@ -59,6 +87,12 @@ export interface PriceDatabaseCounts {
   instruments: number;
   source_snapshots: number;
   price_points: number;
+}
+
+export interface MetadataUsageDatabaseCounts {
+  metadata_snapshots: number;
+  metadata_snapshot_sources: number;
+  usage_points: number;
 }
 
 function countTable(db: DatabaseSync, table: string): number {
@@ -75,5 +109,15 @@ export function countPriceDatabase(db: DatabaseSync): PriceDatabaseCounts {
     instruments: countTable(db, "instrument"),
     source_snapshots: countTable(db, "source_snapshot"),
     price_points: countTable(db, "price_point"),
+  };
+}
+
+export function countMetadataUsageDatabase(
+  db: DatabaseSync,
+): MetadataUsageDatabaseCounts {
+  return {
+    metadata_snapshots: countTable(db, "metadata_snapshot"),
+    metadata_snapshot_sources: countTable(db, "metadata_snapshot_source"),
+    usage_points: countTable(db, "usage_point"),
   };
 }

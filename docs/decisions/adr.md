@@ -189,3 +189,12 @@ Gate 0B는 source coverage를 검증하며 instrument의 출시 시점 자체를
 - 결정: 출시 후 180일 이상 지난 instrument에는 기존 180일 기준을 적용한다. 더 새로운 instrument는 공식 출시일부터 최신 observation까지 90% 이상 coverage를 요구한다
 - 근거: 2026-09-30 캡처에서 PTG seed 18개는 125개 일별 observation을 제공했다. 26FSL seed는 62개를 제공했다. 두 구간의 시작일은 각 클래스의 공식 출시일과 일치한다. 고정 180일 조건은 source coverage와 instrument age를 혼동한다
 - 결과: 현재 실사용 primary instrument를 오래된 class로 교체하지 않는다. 365개 observation은 목표값으로 유지한다. 각 metric과 replay는 별도 충분성 기준을 적용하고, 부족하면 `NO_RESULT`를 반환한다
+
+## ADR-021: usage는 source가 제공하는 identity 단위에 연결한다
+
+Usage source가 강화단계를 제공하지 않으면 grade별 사용량을 만들지 않는다.
+
+- 상태: Accepted
+- 결정: Daily Chart와 Open API ranker stats처럼 `spid`까지만 식별하는 source는 `PLAYER_CARD` usage로 저장한다. Grade를 명시하는 source에서만 `INSTRUMENT` usage를 저장한다
+- 근거: `spid + grade`는 시장 가격 단위지만 현재 공식 usage source는 grade를 구분하지 않는다. Card 사용량을 1강 instrument 사용량으로 저장하면 source가 제공하지 않은 정밀도를 만든다
+- 결과: `usage_point`는 `PLAYER_CARD`와 `INSTRUMENT` subject를 구분한다. Replay와 cohort rule은 observation의 subject granularity를 보존한다

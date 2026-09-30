@@ -35,8 +35,7 @@ instrument
 
 ## metadata를 시점 단위로 저장한다
 
-급여, 포지션, OVR, 세부 능력치, 특성, 팀컬러 정보는 게임 업데이트로 달라질 수 있다.
-replay가 현재 metadata를 과거에 적용하지 않도록 snapshot 또는 유효 기간을 저장한다.
+급여, 포지션, Overall Rating (OVR), 세부 능력치, 특성, 팀컬러 정보는 게임 업데이트로 달라질 수 있다. Replay가 현재 metadata를 과거에 적용하지 않도록 snapshot과 유효 기간을 저장한다.
 
 ```text
 metadata_snapshot
@@ -45,13 +44,18 @@ metadata_snapshot
 - observed_at
 - valid_from
 - valid_to
+- player_name
+- season_id
+- season_name
 - salary
 - positions
 - ovr
 - stats
 - traits
-- source_snapshot_id
+- completeness
 ```
+
+NEXON Open API의 정적 metadata는 선수 이름과 시즌 identity를 제공한다. 이 source만 사용한 row는 `IDENTITY_ONLY`로 저장하고 급여, OVR, 세부 능력치, 특성, 팀컬러를 채우지 않는다. `metadata_snapshot_source`는 하나의 metadata snapshot이 사용한 `spid`와 `season` source snapshot을 각각 연결한다.
 
 팀컬러 membership도 유효 기간을 가진다:
 
@@ -79,6 +83,8 @@ price_point
 - quality_status
 
 usage_point
+- subject_type
+- spid
 - instrument_id
 - as_of
 - appearances
@@ -87,8 +93,9 @@ usage_point
 - source_snapshot_id
 ```
 
-`usage_point.as_of` 이후의 replay에는 해당 row를 사용할 수 있다.
-그 이전 replay에는 사용할 수 없다.
+Usage source가 강화단계를 구분하지 않으면 `PLAYER_CARD`와 `spid`에 observation을 연결한다. Grade 정보를 제공하는 source에서만 `INSTRUMENT`와 `instrument_id`를 사용한다.
+
+`usage_point.as_of` 이후의 replay에는 해당 row를 사용할 수 있다. 그 이전 replay에는 사용할 수 없다.
 
 ## 관계를 정적 feature와 시점 feature로 분리한다
 

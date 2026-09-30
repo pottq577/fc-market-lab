@@ -51,10 +51,15 @@ Regime 경계와 `price_semantics`도 이 단계에서 연결한다.
 
 ## 5. Metadata와 usage를 연결한다
 
-급여, OVR, 포지션, stat, trait, 팀컬러를 metadata snapshot으로 저장한다.
-가능한 범위에서 랭커 사용량과 경기 기록도 `as_of`를 포함해 저장한다.
+이 단계는 source가 실제로 제공하는 범위대로 나눠 진행한다. Open API identity metadata와 현재 usage observation을 먼저 연결한 뒤 Data Center 상세 metadata를 보강한다.
 
-과거 usage를 제공하지 않는 source는 빈 데이터를 임의 생성하지 않고 `UNAVAILABLE_SOURCE` evidence를 남긴다.
+1. `spid`, 시즌, 포지션 코드 정적 metadata를 Raw snapshot으로 저장한다
+2. Seed card의 이름과 시즌 identity를 `IDENTITY_ONLY` metadata snapshot으로 정규화한다
+3. Daily Chart usage를 `PLAYER_CARD` 단위 observation으로 저장한다
+4. 급여, OVR, 세부 능력치, 특성, 팀컬러는 수동 Data Center evidence로 `FULL` metadata snapshot을 추가한다
+5. 포지션이 확인된 card에는 Open API ranker stats를 추가할 수 있다
+
+Source가 grade를 제공하지 않으면 usage를 grade별 instrument에 투영하지 않는다. 과거 usage를 제공하지 않는 source는 빈 데이터를 생성하지 않고 `UNAVAILABLE_SOURCE` evidence를 남긴다.
 
 ## 6. 이벤트와 상품을 annotation한다
 
