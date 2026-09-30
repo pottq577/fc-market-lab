@@ -198,3 +198,12 @@ Usage source가 강화단계를 제공하지 않으면 grade별 사용량을 만
 - 결정: Daily Chart와 Open API ranker stats처럼 `spid`까지만 식별하는 source는 `PLAYER_CARD` usage로 저장한다. Grade를 명시하는 source에서만 `INSTRUMENT` usage를 저장한다
 - 근거: `spid + grade`는 시장 가격 단위지만 현재 공식 usage source는 grade를 구분하지 않는다. Card 사용량을 1강 instrument 사용량으로 저장하면 source가 제공하지 않은 정밀도를 만든다
 - 결과: `usage_point`는 `PLAYER_CARD`와 `INSTRUMENT` subject를 구분한다. Replay와 cohort rule은 observation의 subject granularity를 보존한다
+
+## ADR-022: 브라우저 자동화는 operator opt-in 실험 경로로 분리한다
+
+Data Center의 정식 Gate 0A 판정과 로컬 PoC의 반복 작업 자동화를 같은 상태로 표현하지 않는다.
+
+- 상태: Accepted
+- 결정: Gate 0A의 `MANUAL_ONLY` 판정을 유지하면서 `FC_MARKET_ENABLE_BROWSER_AUTOMATION=1`이 설정된 로컬 환경에서만 Playwright 기반 공개 UI 수집을 허용한다
+- 근거: 현재 검토한 이용약관은 서비스에서 얻은 정보의 무단 복제, 유통, 상업적 이용을 제한하며 반복 자동 추출을 명시적으로 허용하지 않는다. 반면 로컬 PoC에서 20개 seed의 동일 공개 화면을 매번 사람이 저장하는 작업은 분석 로직과 무관한 반복 작업이다
+- 결과: 브라우저 수집은 `OFFICIAL_WEB_UI_PLAYWRIGHT`로 provenance를 분리한다. 로그인, CAPTCHA 우회, stealth, proxy rotation, 비공개 endpoint 직접 호출은 지원하지 않고 HTTP 403 또는 429와 접근 제한 신호에서 중단한다

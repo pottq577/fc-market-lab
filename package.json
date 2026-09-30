@@ -23,9 +23,13 @@
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "check": "npm test && npm run catalog:check && npm run gate:0a:require-ready && npm run gate:0b:require-ready",
     "gate:0b": "node --experimental-strip-types src/cli/gate-0b.ts --catalog data/catalog/seed-catalog.json --raw-dir data/raw/datacenter-price",
-    "gate:0b:require-ready": "node --experimental-strip-types src/cli/gate-0b.ts --catalog data/catalog/seed-catalog.json --raw-dir data/raw/datacenter-price --require-ready"
+    "gate:0b:require-ready": "node --experimental-strip-types src/cli/gate-0b.ts --catalog data/catalog/seed-catalog.json --raw-dir data/raw/datacenter-price --require-ready",
+    "browser:install": "playwright install chromium",
+    "sync:market": "node --experimental-strip-types src/cli/sync-market.ts",
+    "sync:watch": "node --experimental-strip-types src/cli/watch-market.ts"
   },
   "devDependencies": {
-    "@types/node": "^26.6.3"
+    "@types/node": "^26.6.3",
+    "playwright": "1.63.0"
   }
 }

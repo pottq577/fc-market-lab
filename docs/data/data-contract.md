@@ -191,3 +191,19 @@ source를 확인할 수 없는 데이터는 핵심 가격 series나 acceptance e
 
 비공식 서비스는 탐색과 교차검증에 사용할 수 있다.
 해당 서비스의 데이터를 원본처럼 재배포하거나 공식 데이터와 같은 신뢰 수준으로 표시하지 않는다.
+
+## 실험용 브라우저 자동화를 정식 source clearance와 분리한다
+
+Data Center의 Gate 0A `MANUAL_ONLY` 판정은 유지한다. 현재 검토한 이용약관에서 반복적인 자동 추출을 명시적으로 허용하는 근거를 확인하지 못했기 때문에 Playwright 경로를 `ALLOWED` source로 승격하지 않는다.
+
+로컬 PoC에서는 운영자가 `FC_MARKET_ENABLE_BROWSER_AUTOMATION=1`을 명시적으로 설정한 경우에만 공개 Data Center UI를 브라우저로 순차 탐색할 수 있다. 이 경로는 `OFFICIAL_WEB_UI_PLAYWRIGHT` capture method로 따로 기록하며 정식 정책 승인으로 해석하지 않는다.
+
+브라우저 collector는 다음 경계를 지킨다:
+
+- 로그인 세션과 계정 cookie를 사용하지 않는다
+- 비공개 endpoint를 직접 호출하지 않고 브라우저가 공개 UI에서 받은 응답만 관측한다
+- 한 번에 한 선수만 처리하고 요청 사이에 지연을 둔다
+- HTTP 403, HTTP 429, CAPTCHA, 자동입력 방지 또는 다른 접근 제한을 만나면 즉시 중단한다
+- stealth plugin, proxy rotation, fingerprint spoofing, CAPTCHA solving을 사용하지 않는다
+
+상세 실행 계약은 [브라우저 자동화](../implementation/browser-automation.md)를 따른다.

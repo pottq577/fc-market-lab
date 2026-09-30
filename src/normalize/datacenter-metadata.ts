@@ -131,7 +131,7 @@ function insertEntry(
     )
     .run(
       sourceSnapshotId,
-      "OFFICIAL_WEB_UI_MANUAL_CAPTURE",
+      input.document.capture_method,
       entry.source_url,
       entry.observed_at,
       entry.observed_at,
@@ -139,7 +139,9 @@ function insertEntry(
       entry.raw_sha256,
       input.document.capture_method,
       "datacenter-metadata-v1",
-      "fconline-datacenter-manual-only",
+      input.document.capture_method === "OFFICIAL_WEB_UI_PLAYWRIGHT"
+        ? "fconline-datacenter-browser-experimental"
+        : "fconline-datacenter-manual-only",
       `${entry.spid}:${entry.grade}`,
     );
 

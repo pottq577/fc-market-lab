@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "source_id": "fconline-datacenter-browser-automation",
+  "checked_at": "2026-09-30T14:54:00+09:00",
+  "status": "EXPERIMENTAL_OPERATOR_OPT_IN",
+  "formal_gate0a_source_id": "fconline-datacenter-price-history",
+  "formal_gate0a_automation_decision": "MANUAL_ONLY",
+  "terms_url": "https://member.nexon.com/policy/policywrapper.aspx?policyType=12",
+  "decision_reason": "The reviewed terms restrict unauthorized reproduction, distribution, and commercial use of service information, and this review did not identify explicit authorization for recurring automated Data Center extraction. Keep Gate 0A manual-only. Local browser automation is an operator-enabled experimental workflow and is not policy clearance.",
+  "guardrails": [
+    "Use only public FC Online Data Center pages without login or account cookies.",
+    "Drive the documented public UI through Playwright instead of calling undocumented Data Center endpoints directly.",
+    "Run one browser page at a time and delay between seed players.",
+    "Stop on HTTP 403, HTTP 429, CAPTCHA, or other access-control signals.",
+    "Do not use stealth plugins, CAPTCHA solving, proxy rotation, fingerprint spoofing, or access-control bypasses.",
+    "Keep captured raw data local and do not treat this workflow as authorization for redistribution or commercial use."
+  ]
+}

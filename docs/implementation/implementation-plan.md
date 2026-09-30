@@ -56,10 +56,12 @@ Regime 경계와 `price_semantics`도 이 단계에서 연결한다.
 1. `spid`, 시즌, 포지션 코드 정적 metadata를 Raw snapshot으로 저장한다
 2. Seed card의 이름과 시즌 identity를 `IDENTITY_ONLY` metadata snapshot으로 정규화한다
 3. Daily Chart usage를 `PLAYER_CARD` 단위 observation으로 저장한다
-4. 급여, OVR, 세부 능력치, 특성, 팀컬러는 수동 Data Center evidence로 `FULL` metadata snapshot을 추가한다
+4. 급여, OVR, 세부 능력치, 특성, 소속, 국가, 팀컬러는 Data Center evidence로 `FULL` metadata snapshot을 추가한다
 5. 포지션이 확인된 card에는 Open API ranker stats를 추가할 수 있다
 
 Source가 grade를 제공하지 않으면 usage를 grade별 instrument에 투영하지 않는다. 과거 usage를 제공하지 않는 source는 빈 데이터를 생성하지 않고 `UNAVAILABLE_SOURCE` evidence를 남긴다.
+
+반복 수집이 필요하면 [브라우저 자동화](browser-automation.md)의 operator opt-in 경로를 사용한다. 이 경로는 가격, 상세 metadata, Open API metadata, ranker stats를 한 sync로 갱신하지만 Data Center의 Gate 0A `MANUAL_ONLY` 판정을 변경하지 않는다.
 
 ## 6. 이벤트와 상품을 annotation한다
 

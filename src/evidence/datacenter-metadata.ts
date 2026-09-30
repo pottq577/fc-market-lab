@@ -2,6 +2,15 @@ import type { SeedCatalogDocument } from "../catalog/seed-catalog.ts";
 
 export const DATACENTER_METADATA_CAPTURE_METHOD =
   "OFFICIAL_WEB_UI_MANUAL_CAPTURE" as const;
+export const DATACENTER_PLAYWRIGHT_CAPTURE_METHOD =
+  "OFFICIAL_WEB_UI_PLAYWRIGHT" as const;
+export const DATACENTER_METADATA_CAPTURE_METHODS = [
+  DATACENTER_METADATA_CAPTURE_METHOD,
+  DATACENTER_PLAYWRIGHT_CAPTURE_METHOD,
+] as const;
+
+export type DatacenterMetadataCaptureMethod =
+  (typeof DATACENTER_METADATA_CAPTURE_METHODS)[number];
 
 export interface DatacenterMetadataPosition {
   name: string;
@@ -29,7 +38,7 @@ export interface DatacenterMetadataEntry {
 export interface DatacenterMetadataEvidenceDocument {
   schema_version: 1;
   catalog_id: string;
-  capture_method: typeof DATACENTER_METADATA_CAPTURE_METHOD;
+  capture_method: DatacenterMetadataCaptureMethod;
   entries: DatacenterMetadataEntry[];
 }
 
@@ -248,9 +257,14 @@ export function parseDatacenterMetadataEvidenceDocument(
   if (value.schema_version !== 1) {
     throw new TypeError("document.schema_version must be 1");
   }
-  if (value.capture_method !== DATACENTER_METADATA_CAPTURE_METHOD) {
+  if (
+    typeof value.capture_method !== "string" ||
+    !DATACENTER_METADATA_CAPTURE_METHODS.includes(
+      value.capture_method as DatacenterMetadataCaptureMethod,
+    )
+  ) {
     throw new TypeError(
-      `document.capture_method must be ${DATACENTER_METADATA_CAPTURE_METHOD}`,
+      `document.capture_method must be one of: ${DATACENTER_METADATA_CAPTURE_METHODS.join(", ")}`,
     );
   }
   if (!Array.isArray(value.entries) || value.entries.length === 0) {
@@ -270,7 +284,7 @@ export function parseDatacenterMetadataEvidenceDocument(
   return {
     schema_version: 1,
     catalog_id: requiredString(value, "catalog_id", "document"),
-    capture_method: DATACENTER_METADATA_CAPTURE_METHOD,
+    capture_method: value.capture_method as DatacenterMetadataCaptureMethod,
     entries,
   };
 }
