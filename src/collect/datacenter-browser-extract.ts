@@ -299,6 +299,43 @@ function recordFromRenderedPageText(
   return null;
 }
 
+function recordFromRenderedSummary(
+  text: string,
+  spid: string,
+  playerName: string,
+): Record<string, unknown> | null {
+  const lines = pageLines(text);
+  const detailIndex = lines.findIndex((line) => line === "선수 상세 정보");
+  const start = detailIndex >= 0 ? detailIndex + 1 : 0;
+  const end = Math.min(lines.length - 2, start + 40);
+
+  for (let index = start; index < end; index += 1) {
+    const ovr = toPositiveInteger(lines[index]);
+    const position = normalizePositionName(lines[index + 1]);
+    const pay = toPositiveInteger(lines[index + 2]);
+    if (
+      ovr === null ||
+      ovr < 50 ||
+      ovr > 250 ||
+      !position ||
+      pay === null ||
+      pay > 99
+    ) {
+      continue;
+    }
+
+    return {
+      spid,
+      name: lines.includes(playerName) ? playerName : undefined,
+      pay,
+      ovr,
+      position,
+    };
+  }
+
+  return null;
+}
+
 function linesBetween(
   lines: string[],
   startLabel: string,
@@ -402,21 +439,30 @@ export function extractDatacenterMetadata(input: {
   spid: string;
   expected_player_name: string;
   page_text: string;
+  page_html?: string;
   response_bodies: string[];
 }): BrowserMetadataExtraction {
   if (!/^\d+$/.test(input.spid)) {
     throw new TypeError("spid must contain digits only");
   }
+  const structuredSources = input.page_html
+    ? [...input.response_bodies, input.page_html]
+    : input.response_bodies;
   const record =
-    findRecord(input.response_bodies, input.spid) ??
+    findRecord(structuredSources, input.spid) ??
     recordFromRenderedPageText(
+      input.page_text,
+      input.spid,
+      input.expected_player_name,
+    ) ??
+    recordFromRenderedSummary(
       input.page_text,
       input.spid,
       input.expected_player_name,
     );
   if (!record) {
     throw new TypeError(
-      `no Data Center player record or rendered header found for spid=${input.spid}`,
+      `no Data Center player record, rendered header, or rendered summary found for spid=${input.spid}`,
     );
   }
   const salary = toPositiveInteger(record.pay);

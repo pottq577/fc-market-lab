@@ -109,6 +109,42 @@ function detectAccessControl(pageUrl: string, pageText: string): void {
   }
 }
 
+const POSITION_OVR_PATTERN =
+  /\b(?:GK|SW|RWB|RB|RCB|CB|LCB|LB|LWB|CDM|RM|CM|LM|CAM|RW|RF|CF|LF|LW|ST)\s+\d{2,3}\b/;
+
+function renderedMetadataReady(text: string, playerName: string): boolean {
+  const hasPlayerName = text.includes(playerName);
+  const hasPositionOvr = POSITION_OVR_PATTERN.test(text);
+  const hasSummary = /(?:^|\n)\s*\d{2,3}\s*\n\s*[A-Z]{1,4}\s*\n\s*\d{1,2}\s*(?:\n|$)/m.test(
+    text,
+  );
+  return hasPlayerName && (hasPositionOvr || hasSummary);
+}
+
+async function waitForRenderedMetadata(
+  page: PageLike,
+  playerName: string,
+  timeoutMs: number,
+): Promise<string> {
+  const body = page.locator("body");
+  const deadline = Date.now() + Math.min(timeoutMs, 20_000);
+  let lastText = "";
+
+  do {
+    try {
+      lastText = await body.innerText();
+      if (renderedMetadataReady(lastText, playerName)) {
+        return lastText;
+      }
+    } catch {
+      // Keep polling until the page body is available or the deadline expires.
+    }
+    await page.waitForTimeout(250);
+  } while (Date.now() < deadline);
+
+  return lastText;
+}
+
 async function trySelectLongestHistory(page: PageLike): Promise<void> {
   for (const label of ["1년", "365일", "365", "전체"]) {
     const locator = page.getByText(label, { exact: true }).first();
@@ -233,7 +269,11 @@ async function captureSeed(
     await page.waitForTimeout(options.settleMs);
     await Promise.allSettled([...pending]);
 
-    const pageText = await page.locator("body").innerText();
+    const pageText = await waitForRenderedMetadata(
+      page,
+      seed.player_name,
+      options.navigationTimeoutMs,
+    );
     detectAccessControl(page.url(), pageText);
     if (blockedStatus) {
       throw new Error(
@@ -249,12 +289,22 @@ async function captureSeed(
       grade: seed.primary_instrument.grade,
       observedAt,
     });
-    const metadata = extractDatacenterMetadata({
-      spid: seed.primary_instrument.spid,
-      expected_player_name: seed.player_name,
-      page_text: pageText,
-      response_bodies: responses.map((item) => item.body.toString("utf8")),
-    });
+    let metadata: BrowserMetadataExtraction;
+    try {
+      metadata = extractDatacenterMetadata({
+        spid: seed.primary_instrument.spid,
+        expected_player_name: seed.player_name,
+        page_text: pageText,
+        page_html: pageRaw.toString("utf8"),
+        response_bodies: responses.map((item) => item.body.toString("utf8")),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new TypeError(
+        `${message}; page_url=${page.url()}; body_chars=${pageText.length}; ` +
+          `player_name_present=${pageText.includes(seed.player_name)}; responses=${responses.length}`,
+      );
+    }
 
     return {
       spid: seed.primary_instrument.spid,

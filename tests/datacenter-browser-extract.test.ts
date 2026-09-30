@@ -118,6 +118,50 @@ Path to Glory
 대인 수비 124
 `;
 
+const summaryOnlyPageText = `
+선수 상세 정보
+116
+LB
+26
+1
+Image
+Image
+1998.07.22 174cm 71kg 보통
+Image 첼시
+Image 스페인
+특성
+Image: 강철몸 강철몸
+강화
+1
+팀컬러
+소속 팀컬러
+스페인
+첼시
+Path to Glory
+관계 팀컬러
+2026 스페인
+속력 125
+가속력 123
+골 결정력 101
+슛 파워 110
+중거리 슛 108
+위치 선정 115
+발리슛 100
+페널티 킥 99
+짧은 패스 121
+시야 119
+크로스 124
+긴 패스 118
+프리킥 105
+커브 120
+드리블 122
+볼 컨트롤 121
+민첩성 126
+밸런스 125
+반응 속도 123
+대인 수비 124
+`;
+
 test("extracts named stats from rendered page text", () => {
   const stats = extractStatsFromPageText(pageText);
   assert.equal(stats.속력, 125);
@@ -161,6 +205,41 @@ test("falls back to the rendered Data Center header when no player JSON is obser
   assert.deepEqual(result.clubs, ["첼시"]);
   assert.deepEqual(result.nations, ["스페인"]);
   assert.ok(result.team_colors.includes("Path to Glory"));
+});
+
+
+test("falls back to the rendered summary even when the player-name node is late", () => {
+  const result = extractDatacenterMetadata({
+    spid: "863239231",
+    expected_player_name: "마르크 쿠쿠레야",
+    page_text: summaryOnlyPageText,
+    response_bodies: [],
+  });
+
+  assert.equal(result.salary, 26);
+  assert.equal(result.ovr, 116);
+  assert.deepEqual(result.positions, [
+    { name: "LB", ovr: 116, primary: true },
+  ]);
+  assert.deepEqual(result.clubs, ["첼시"]);
+  assert.deepEqual(result.nations, ["스페인"]);
+});
+
+test("uses embedded page HTML as a structured metadata fallback", () => {
+  const result = extractDatacenterMetadata({
+    spid: "863239231",
+    expected_player_name: "마르크 쿠쿠레야",
+    page_text: pageText,
+    page_html:
+      '<script>window.player={"spid":863239231,"name":"마르크 쿠쿠레야","pay":26,"ovr":116,"position":"LB"};</script>',
+    response_bodies: [],
+  });
+
+  assert.equal(result.salary, 26);
+  assert.equal(result.ovr, 116);
+  assert.deepEqual(result.positions, [
+    { name: "LB", ovr: 116, primary: true },
+  ]);
 });
 
 test("rejects a mismatched player record", () => {
