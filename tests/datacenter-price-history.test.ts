@@ -191,3 +191,48 @@ test("parses timestamped chartData with unquoted known keys", () => {
     { source_timestamp_ms: 1790348400000, value: 1100000 },
   ]);
 });
+
+test("parses mixed legacy chartData date labels and Date(timestamp) entries", () => {
+  const october2 = Date.UTC(2025, 9, 2);
+  const raw = `
+    <script>
+    var chartData = {
+      time: ["9.30", "10.01", "Date(${october2})", "10.03"],
+      value: ["1000000", "1100000", "1050000", "1200000"],
+    };
+    </script>
+  `;
+
+  assert.deepEqual(
+    parseDatacenterPriceGraph(raw, "2025-10-04T09:00:00+09:00"),
+    [
+      { source_timestamp_ms: Date.UTC(2025, 8, 30), value: 1000000 },
+      { source_timestamp_ms: Date.UTC(2025, 9, 1), value: 1100000 },
+      { source_timestamp_ms: october2, value: 1050000 },
+      { source_timestamp_ms: Date.UTC(2025, 9, 3), value: 1200000 },
+    ],
+  );
+});
+
+test("parses mixed legacy chartData with new Date and plain timestamp entries", () => {
+  const september30 = Date.UTC(2025, 8, 30);
+  const october1 = Date.UTC(2025, 9, 1);
+  const raw = `
+    <script>
+    var chartData = {
+      time: ["${september30}", "new Date(${october1})", "10.02", "10.03"],
+      value: ["1000000", "1100000", "1050000", "1200000"],
+    };
+    </script>
+  `;
+
+  assert.deepEqual(
+    parseDatacenterPriceGraph(raw, "2025-10-04T09:00:00+09:00"),
+    [
+      { source_timestamp_ms: september30, value: 1000000 },
+      { source_timestamp_ms: october1, value: 1100000 },
+      { source_timestamp_ms: Date.UTC(2025, 9, 2), value: 1050000 },
+      { source_timestamp_ms: Date.UTC(2025, 9, 3), value: 1200000 },
+    ],
+  );
+});

@@ -358,6 +358,117 @@ function parseTimestampedChartData(chartData: unknown): PricePoint[] {
 }
 
 
+function parseExplicitTimestamp(value: unknown, context: string): number | null {
+  if (typeof value === "number") {
+    return readPositiveInteger(value, context);
+  }
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (/^\d+$/.test(trimmed)) {
+    return readPositiveInteger(trimmed, context);
+  }
+
+  const dateConstructor = /^(?:new\s+)?Date\s*\(\s*(\d+)\s*\)$/i.exec(trimmed);
+  return dateConstructor
+    ? readPositiveInteger(dateConstructor[1], context)
+    : null;
+}
+
+function resolveMixedLegacyTimes(
+  entries: unknown[],
+  observedAt: string | undefined,
+  context: string,
+): number[] {
+  if (entries.length < 2) {
+    throw new TypeError(`${context}.time must contain at least two entries`);
+  }
+
+  const parsed = entries.map((entry, index) => {
+    const entryContext = `${context}.time[${index}]`;
+    const explicitTimestamp = parseExplicitTimestamp(entry, entryContext);
+    if (explicitTimestamp !== null) {
+      return { kind: "timestamp" as const, value: explicitTimestamp };
+    }
+    return { kind: "label" as const, value: parseMonthDay(entry, entryContext) };
+  });
+
+  const hasLabels = parsed.some((entry) => entry.kind === "label");
+  if (hasLabels && !observedAt) {
+    throw new TypeError(
+      `observed_at is required when ${context}.time contains M.DD date labels`,
+    );
+  }
+
+  let observedDateMs: number | null = null;
+  let observedYear: number | null = null;
+  if (hasLabels && observedAt) {
+    const observed = kstCalendarDate(observedAt);
+    observedYear = observed.year;
+    observedDateMs = calendarDateMs(
+      observed.year,
+      observed.month,
+      observed.day,
+      "observed_at",
+    );
+  }
+
+  const resolved = new Array<number>(parsed.length);
+  let nextTimestamp: number | null = null;
+
+  for (let index = parsed.length - 1; index >= 0; index -= 1) {
+    const entry = parsed[index];
+    if (!entry) {
+      throw new TypeError(`failed to resolve ${context}.time[${index}]`);
+    }
+
+    let timestamp: number;
+    if (entry.kind === "timestamp") {
+      timestamp = entry.value;
+    } else {
+      if (observedYear === null || observedDateMs === null) {
+        throw new TypeError(
+          `observed_at is required when ${context}.time contains M.DD date labels`,
+        );
+      }
+
+      const upperBound = nextTimestamp ?? observedDateMs + DAY_MS;
+      let year = nextTimestamp === null
+        ? observedYear
+        : new Date(nextTimestamp).getUTCFullYear();
+      timestamp = calendarDateMs(
+        year,
+        entry.value.month,
+        entry.value.day,
+        `${context}.time[${index}]`,
+      );
+      if (timestamp >= upperBound) {
+        year -= 1;
+        timestamp = calendarDateMs(
+          year,
+          entry.value.month,
+          entry.value.day,
+          `${context}.time[${index}]`,
+        );
+      }
+    }
+
+    if (nextTimestamp !== null && timestamp >= nextTimestamp) {
+      throw new TypeError(
+        `${context}.time must resolve to strictly increasing timestamps; ` +
+          `${context}.time[${index}] resolved to ${timestamp} before ${nextTimestamp}`,
+      );
+    }
+
+    resolved[index] = timestamp;
+    nextTimestamp = timestamp;
+  }
+
+  return resolved;
+}
+
 function parseLegacyChartData(
   chartData: Record<string, unknown>,
   observedAt?: string,
@@ -371,47 +482,32 @@ function parseLegacyChartData(
     throw new TypeError("chartData.time and chartData.value must have the same length");
   }
 
-  const timestampPattern = /^(?:new\s+Date\()?([0-9]+)\)?$/;
-  const explicitTimestamps = chartData.time.map((entry) => {
-    if (typeof entry === "number") {
-      return readPositiveInteger(entry, "chartData.time");
-    }
-    if (typeof entry !== "string") {
-      return null;
-    }
-    const match = timestampPattern.exec(entry.trim());
-    return match ? readPositiveInteger(match[1], "chartData.time") : null;
-  });
+  const timestamps = resolveMixedLegacyTimes(
+    chartData.time,
+    observedAt,
+    "chartData",
+  );
 
-  if (explicitTimestamps.every((timestamp) => timestamp !== null)) {
-    return finalizePoints(
-      explicitTimestamps.map((sourceTimestampMs, index) => ({
-        source_timestamp_ms: sourceTimestampMs as number,
-        value: readPositiveInteger(chartData.value[index], `chartData.value[${index}]`),
-      })),
-    );
-  }
-
-  if (!explicitTimestamps.every((timestamp) => timestamp === null)) {
-    throw new TypeError(
-      "chartData.time must use one consistent representation: timestamps or M.DD labels",
-    );
-  }
-  if (!observedAt) {
-    throw new TypeError("observed_at is required for chartData M.DD date labels");
-  }
-
-  return parseLabeledSeries(chartData.time, chartData.value, observedAt, "chartData");
+  return finalizePoints(
+    timestamps.map((sourceTimestampMs, index) => ({
+      source_timestamp_ms: sourceTimestampMs,
+      value: readPositiveInteger(chartData.value[index], `chartData.value[${index}]`),
+    })),
+  );
 }
 
 function parseMonthDay(value: unknown, context: string): { month: number; day: number } {
   if (typeof value !== "string") {
-    throw new TypeError(`${context} must be an M.DD date label`);
+    throw new TypeError(
+      `${context} must be an M.DD date label; got ${JSON.stringify(value)}`,
+    );
   }
 
   const match = /^(\d{1,2})\.(\d{2})$/.exec(value.trim());
   if (!match) {
-    throw new TypeError(`${context} must be an M.DD date label`);
+    throw new TypeError(
+      `${context} must be an M.DD date label; got ${JSON.stringify(value)}`,
+    );
   }
 
   const month = Number(match[1]);
