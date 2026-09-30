@@ -35,11 +35,12 @@ Replay 중 결과에 맞춰 seed를 바꾸지 않는다.
 Seed catalog 전체에 Gate 0A source를 적용한다.
 Primary instrument마다 history span, expected observation, valid observation, coverage ratio를 계산한다.
 
-Acceptance threshold를 충족하지 못하면 다음 중 하나를 선택하고 근거를 남긴다:
+History qualification은 두 경로를 사용한다:
 
-- source를 변경한다
-- instrument를 제외하고 제외 이유를 기록한다
-- acceptance threshold 변경이 필요한 경우 새 ADR을 작성한다
+- 출시 후 180일 이상 지난 instrument는 최소 180일 history와 90% 이상 coverage를 요구한다
+- 출시 후 180일이 지나지 않은 instrument는 공식 출시일 evidence를 연결하고 출시일부터 최신 observation까지 90% 이상 full-lifetime coverage를 요구한다
+
+Gate가 실패하면 source 누락, observation 누락, 출시일 evidence 누락을 구분한다. 원인에 맞는 입력만 수정한다. 365개 observation은 계속 목표값으로 유지한다.
 
 ## 4. Raw와 Normalized 가격 데이터를 적재한다
 

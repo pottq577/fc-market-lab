@@ -76,15 +76,17 @@ Gate 0A 통과가 표본 coverage를 보장하지 않기 때문에 별도 단계
 다음 조건을 모두 검증한다:
 
 - seed player 20–30명의 주요 class와 grade를 식별한다
-- primary instrument마다 최소 180일 history span을 확보한다
-- 목표 history span은 365일이다
 - source-native expected observation 기준 coverage ratio를 계산한다
 - primary instrument의 coverage ratio는 90% 이상이어야 한다
+- 출시 후 180일 이상 지난 instrument는 최소 180일 history span을 확보한다
+- 출시 후 180일이 지나지 않은 instrument는 공식 출시일 이후 전체 기간의 coverage를 검증한다
+- 목표 history는 365개 observation, 즉 일별 source에서 364일 span이다
 - 누락 구간과 source outage를 별도 상태로 기록한다
 - source별 temporal granularity가 섞이면 series를 분리하거나 명시적으로 normalize한다
 
-180일과 90%는 1차 PoC acceptance threshold다.
-source 특성상 이 기준이 부적절하다는 증거가 나오면 ADR을 추가해 변경한다.
+180일은 충분히 오래 존재한 instrument의 최소 history 기준이다. 신규 instrument의 나이는 source coverage 실패가 아니다. 공식 출시일 evidence를 연결하고, 출시일부터 최신 observation까지 90% 이상 확보하면 full-lifetime coverage로 통과한다.
+
+Gate 0B 통과는 모든 분석 window의 계산 가능성을 보장하지 않는다. 각 metric과 replay는 자체 데이터 충분성 기준을 적용한다. 기준 미달이면 `NO_RESULT`를 반환한다.
 
 ## 가격 데이터 의미를 보존한다
 

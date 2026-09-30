@@ -26,6 +26,14 @@ PoC 결과는 전체 FC온라인 시장의 통계로 일반화하지 않는다.
 선정 기준과 frozen seed set을 보존한다.
 PoC 이후 표본 확대가 필요하면 기존 sample과 새 sample을 같은 이름으로 덮어쓰지 않는다.
 
+## 신규 class는 긴 분석 window를 지원하지 않을 수 있다
+
+Gate 0B는 출시 후 180일이 지나지 않은 instrument에 full-lifetime coverage를 허용한다.
+이 판정은 source가 instrument의 존재 기간을 충분히 제공한다는 뜻이다.
+
+긴 baseline과 과거 replay는 필요한 observation 수를 별도로 충족해야 한다.
+데이터가 부족하면 해당 metric은 `NO_RESULT`를 반환한다.
+
 ## class 수가 많은 선수는 별도 통제가 필요하다
 
 한 선수의 instrument가 많으면 instrument 직접 집계에서 과도한 가중치를 가진다.
@@ -81,16 +89,15 @@ PoC는 median return, breadth, relative strength, dispersion으로 표본 내부
 
 ## 구현 전에 남은 오픈 질문
 
-현재 구현을 진행하며 다음 항목을 evidence로 닫는다:
+Gate 0A, frozen seed catalog, Gate 0B evidence로 가격 source와 primary instrument를 확인했다.
+Native granularity는 `P1D`로 확인했다.
+다음 항목은 계속 evidence로 닫는다:
 
-1. 365일 가격 history를 확보할 수 있는 source와 허용된 access method는 무엇인가
-2. 최종 20–30명 seed player와 primary instrument는 무엇인가
-3. 각 player에서 추적할 grade 범위는 어디까지인가
-4. 첫 팀컬러 대체관계 검증에 사용할 팀컬러는 무엇인가
-5. `CORE`, `HIGH_END`, `PREMIUM_SCARCE`의 첫 rule 또는 수동 seed 기준은 무엇인가
-6. 첫 365일에서 수동 등록할 주요 event 범위는 어디까지인가
-7. 실제 가격 source의 native temporal granularity는 무엇인가
-8. 랭커 usage history를 과거 어느 시점까지 복원할 수 있는가
+1. 각 player에서 추적할 grade 범위는 어디까지인가
+2. 첫 팀컬러 대체관계 검증에 사용할 팀컬러는 무엇인가
+3. `CORE`, `HIGH_END`, `PREMIUM_SCARCE`의 첫 rule 또는 수동 seed 기준은 무엇인가
+4. 첫 365일에서 수동 등록할 주요 event 범위는 어디까지인가
+5. 랭커 usage history를 과거 어느 시점까지 복원할 수 있는가
 
 이 질문은 불확실한 값을 문서에 임의로 채우지 않고 Gate와 catalog 작업에서 결정한다.
 

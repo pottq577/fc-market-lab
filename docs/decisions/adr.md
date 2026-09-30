@@ -180,3 +180,12 @@ PoC 단계에서 서로 다른 의미의 변수를 하나의 숫자로 압축하
 - 결정: 사용자 수요, 수익화, 배포 인프라, 운영비를 PoC acceptance에서 제외한다
 - 근거: 데이터 접근과 분석 유효성을 확인하기 전에 운영 설계를 고정하면 범위가 불필요하게 커진다
 - 결과: 공개 서비스 전환 여부는 PoC 결과를 검토한 뒤 결정한다
+
+## ADR-020: 신규 instrument는 full-lifetime coverage로 Gate 0B를 판정한다
+
+Gate 0B는 source coverage를 검증하며 instrument의 출시 시점 자체를 실패 사유로 만들지 않는다.
+
+- 상태: Accepted
+- 결정: 출시 후 180일 이상 지난 instrument에는 기존 180일 기준을 적용한다. 더 새로운 instrument는 공식 출시일부터 최신 observation까지 90% 이상 coverage를 요구한다
+- 근거: 2026-09-30 캡처에서 PTG seed 18개는 125개 일별 observation을 제공했다. 26FSL seed는 62개를 제공했다. 두 구간의 시작일은 각 클래스의 공식 출시일과 일치한다. 고정 180일 조건은 source coverage와 instrument age를 혼동한다
+- 결과: 현재 실사용 primary instrument를 오래된 class로 교체하지 않는다. 365개 observation은 목표값으로 유지한다. 각 metric과 replay는 별도 충분성 기준을 적용하고, 부족하면 `NO_RESULT`를 반환한다

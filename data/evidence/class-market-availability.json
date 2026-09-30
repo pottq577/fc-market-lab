@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "classes": [
+    {
+      "spid_prefix": "856",
+      "class_code": "25UCL",
+      "market_available_on": "2026-02-20",
+      "source_url": "https://fconline.nexon.com/news/notice/view?n4ArticleSN=5854",
+      "evidence_note": "Official 25UCL release notice dated 2026-02-20."
+    },
+    {
+      "spid_prefix": "863",
+      "class_code": "PTG",
+      "market_available_on": "2026-05-28",
+      "source_url": "https://fconline.nexon.com/news/notice/view?n4ArticleSN=6018",
+      "evidence_note": "Official PTG release notice dated 2026-05-28."
+    },
+    {
+      "spid_prefix": "868",
+      "class_code": "26FSL",
+      "market_available_on": "2026-07-30",
+      "source_url": "https://fconline.nexon.com/news/notice/view?n4ArticleSN=6143",
+      "evidence_note": "Official 26FSL release notice dated 2026-07-30."
+    }
+  ]
+}

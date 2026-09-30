@@ -3,6 +3,11 @@ import type {
   SeedPlayer,
   SeedPrimaryInstrument,
 } from "../catalog/seed-catalog.ts";
+import type {
+  ClassMarketAvailability,
+  ClassMarketAvailabilityDocument,
+} from "../evidence/class-market-availability.ts";
+import { findClassMarketAvailability } from "../evidence/class-market-availability.ts";
 
 export const GATE_0B_MIN_HISTORY_SPAN_DAYS = 180;
 export const GATE_0B_TARGET_HISTORY_SPAN_DAYS = 364;
@@ -14,13 +19,18 @@ export type Gate0BInstrumentStatus =
   | "INSUFFICIENT_SPAN"
   | "INSUFFICIENT_COVERAGE"
   | "UNSUPPORTED_GRANULARITY";
+export type Gate0BHistoryQualification = "MIN_HISTORY" | "FULL_LIFETIME";
 export type Gate0BStatus = "READY" | "BLOCKED";
 
 export interface CoverageSnapshot {
   spid: string;
   grade: number;
+  class_code?: string;
   observed_at: string;
+  raw_sha256?: string;
   point_count: number;
+  first_source_date?: string;
+  last_source_date?: string;
   observed_span_days: number;
   native_granularity: string;
   source_path?: string;
@@ -32,11 +42,19 @@ export interface Gate0BInstrumentResult {
   primary_instrument: SeedPrimaryInstrument;
   status: Gate0BInstrumentStatus;
   blockers: string[];
+  history_qualification?: Gate0BHistoryQualification;
+  class_code?: string;
   snapshot_observed_at?: string;
+  raw_sha256?: string;
   point_count?: number;
+  first_source_date?: string;
+  last_source_date?: string;
   observed_span_days?: number;
   expected_observations?: number;
   coverage_ratio?: number;
+  market_available_on?: string;
+  lifetime_expected_observations?: number;
+  lifetime_coverage_ratio?: number;
   target_history_reached?: boolean;
   source_path?: string;
 }
@@ -51,9 +69,12 @@ export interface Gate0BSummary {
     min_history_span_days: number;
     target_history_span_days: number;
     min_coverage_ratio: number;
+    young_instrument_policy: "FULL_LIFETIME";
   };
   instruments: Gate0BInstrumentResult[];
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function instrumentKey(instrument: SeedPrimaryInstrument): string {
   return `${instrument.spid}:${instrument.grade}`;
@@ -85,9 +106,96 @@ function latestSnapshots(
   return latest;
 }
 
+function dateSpanDays(start: string, end: string): number | null {
+  const startMs = Date.parse(`${start}T00:00:00Z`);
+  const endMs = Date.parse(`${end}T00:00:00Z`);
+  if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs < startMs) {
+    return null;
+  }
+  return (endMs - startMs) / DAY_MS;
+}
+
+function lifetimeQualification(
+  snapshot: CoverageSnapshot,
+  availability: ClassMarketAvailability | undefined,
+  cadenceDays: number,
+): {
+  blockers: string[];
+  expectedObservations?: number;
+  coverageRatio?: number;
+  marketAvailableOn?: string;
+} {
+  if (!availability) {
+    return {
+      blockers: [
+        `history span ${snapshot.observed_span_days}d < ${GATE_0B_MIN_HISTORY_SPAN_DAYS}d and no official market-availability evidence is registered`,
+      ],
+    };
+  }
+
+  if (
+    snapshot.class_code !== undefined &&
+    snapshot.class_code !== availability.class_code
+  ) {
+    return {
+      blockers: [
+        `snapshot class_code=${snapshot.class_code} does not match availability class_code=${availability.class_code}`,
+      ],
+      marketAvailableOn: availability.market_available_on,
+    };
+  }
+
+  if (!snapshot.first_source_date || !snapshot.last_source_date) {
+    return {
+      blockers: [
+        "full-lifetime qualification requires first_source_date and last_source_date",
+      ],
+      marketAvailableOn: availability.market_available_on,
+    };
+  }
+
+  if (snapshot.first_source_date < availability.market_available_on) {
+    return {
+      blockers: [
+        `first source date ${snapshot.first_source_date} predates official market availability ${availability.market_available_on}`,
+      ],
+      marketAvailableOn: availability.market_available_on,
+    };
+  }
+
+  const lifetimeSpanDays = dateSpanDays(
+    availability.market_available_on,
+    snapshot.last_source_date,
+  );
+  if (lifetimeSpanDays === null) {
+    return {
+      blockers: ["market availability and source dates do not form a valid range"],
+      marketAvailableOn: availability.market_available_on,
+    };
+  }
+
+  const expectedObservations = Math.floor(lifetimeSpanDays / cadenceDays) + 1;
+  const coverageRatio = snapshot.point_count / expectedObservations;
+  const blockers: string[] = [];
+
+  if (coverageRatio < GATE_0B_MIN_COVERAGE_RATIO) {
+    blockers.push(
+      `full-lifetime coverage ${coverageRatio.toFixed(4)} < ${GATE_0B_MIN_COVERAGE_RATIO.toFixed(4)}`,
+    );
+  }
+
+  return {
+    blockers,
+    expectedObservations,
+    coverageRatio,
+    marketAvailableOn: availability.market_available_on,
+  };
+}
+
 function evaluateInstrument(
   seed: SeedPlayer,
   snapshot: CoverageSnapshot | undefined,
+  availabilityDocument: ClassMarketAvailabilityDocument | undefined,
 ): Gate0BInstrumentResult {
   const base = {
     player_key: seed.player_key,
@@ -111,8 +219,12 @@ function evaluateInstrument(
       blockers: [
         `native_granularity=${snapshot.native_granularity} is not a day-based cadence`,
       ],
+      class_code: snapshot.class_code,
       snapshot_observed_at: snapshot.observed_at,
+      raw_sha256: snapshot.raw_sha256,
       point_count: snapshot.point_count,
+      first_source_date: snapshot.first_source_date,
+      last_source_date: snapshot.last_source_date,
       observed_span_days: snapshot.observed_span_days,
       source_path: snapshot.source_path,
     };
@@ -121,32 +233,14 @@ function evaluateInstrument(
   const expectedObservations =
     Math.floor(snapshot.observed_span_days / cadenceDays) + 1;
   const coverageRatio = snapshot.point_count / expectedObservations;
-  const blockers: string[] = [];
-
-  if (snapshot.observed_span_days < GATE_0B_MIN_HISTORY_SPAN_DAYS) {
-    blockers.push(
-      `history span ${snapshot.observed_span_days}d < ${GATE_0B_MIN_HISTORY_SPAN_DAYS}d`,
-    );
-  }
-  if (coverageRatio < GATE_0B_MIN_COVERAGE_RATIO) {
-    blockers.push(
-      `coverage ${coverageRatio.toFixed(4)} < ${GATE_0B_MIN_COVERAGE_RATIO.toFixed(4)}`,
-    );
-  }
-
-  let status: Gate0BInstrumentStatus = "PASS";
-  if (blockers.length > 0) {
-    status = snapshot.observed_span_days < GATE_0B_MIN_HISTORY_SPAN_DAYS
-      ? "INSUFFICIENT_SPAN"
-      : "INSUFFICIENT_COVERAGE";
-  }
-
-  return {
+  const common = {
     ...base,
-    status,
-    blockers,
+    class_code: snapshot.class_code,
     snapshot_observed_at: snapshot.observed_at,
+    raw_sha256: snapshot.raw_sha256,
     point_count: snapshot.point_count,
+    first_source_date: snapshot.first_source_date,
+    last_source_date: snapshot.last_source_date,
     observed_span_days: snapshot.observed_span_days,
     expected_observations: expectedObservations,
     coverage_ratio: Number(coverageRatio.toFixed(6)),
@@ -154,15 +248,74 @@ function evaluateInstrument(
       snapshot.observed_span_days >= GATE_0B_TARGET_HISTORY_SPAN_DAYS,
     source_path: snapshot.source_path,
   };
+
+  if (coverageRatio < GATE_0B_MIN_COVERAGE_RATIO) {
+    return {
+      ...common,
+      status: "INSUFFICIENT_COVERAGE",
+      blockers: [
+        `coverage ${coverageRatio.toFixed(4)} < ${GATE_0B_MIN_COVERAGE_RATIO.toFixed(4)}`,
+      ],
+    };
+  }
+
+  if (snapshot.observed_span_days >= GATE_0B_MIN_HISTORY_SPAN_DAYS) {
+    return {
+      ...common,
+      status: "PASS",
+      blockers: [],
+      history_qualification: "MIN_HISTORY",
+    };
+  }
+
+  const availability = availabilityDocument
+    ? findClassMarketAvailability(availabilityDocument, snapshot.spid)
+    : undefined;
+  const lifetime = lifetimeQualification(snapshot, availability, cadenceDays);
+  if (lifetime.blockers.length > 0) {
+    return {
+      ...common,
+      status:
+        lifetime.coverageRatio !== undefined &&
+        lifetime.coverageRatio < GATE_0B_MIN_COVERAGE_RATIO
+          ? "INSUFFICIENT_COVERAGE"
+          : "INSUFFICIENT_SPAN",
+      blockers: lifetime.blockers,
+      market_available_on: lifetime.marketAvailableOn,
+      lifetime_expected_observations: lifetime.expectedObservations,
+      lifetime_coverage_ratio:
+        lifetime.coverageRatio === undefined
+          ? undefined
+          : Number(lifetime.coverageRatio.toFixed(6)),
+    };
+  }
+
+  return {
+    ...common,
+    status: "PASS",
+    blockers: [],
+    history_qualification: "FULL_LIFETIME",
+    market_available_on: lifetime.marketAvailableOn,
+    lifetime_expected_observations: lifetime.expectedObservations,
+    lifetime_coverage_ratio:
+      lifetime.coverageRatio === undefined
+        ? undefined
+        : Number(lifetime.coverageRatio.toFixed(6)),
+  };
 }
 
 export function evaluateGate0B(
   catalog: SeedCatalogDocument,
   snapshots: CoverageSnapshot[],
+  availabilityDocument?: ClassMarketAvailabilityDocument,
 ): Gate0BSummary {
   const latest = latestSnapshots(snapshots);
   const instruments = catalog.seeds.map((seed) =>
-    evaluateInstrument(seed, latest.get(instrumentKey(seed.primary_instrument))),
+    evaluateInstrument(
+      seed,
+      latest.get(instrumentKey(seed.primary_instrument)),
+      availabilityDocument,
+    ),
   );
   const passed = instruments.filter((item) => item.status === "PASS").length;
 
@@ -176,6 +329,7 @@ export function evaluateGate0B(
       min_history_span_days: GATE_0B_MIN_HISTORY_SPAN_DAYS,
       target_history_span_days: GATE_0B_TARGET_HISTORY_SPAN_DAYS,
       min_coverage_ratio: GATE_0B_MIN_COVERAGE_RATIO,
+      young_instrument_policy: "FULL_LIFETIME",
     },
     instruments,
   };
