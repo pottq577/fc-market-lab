@@ -9,7 +9,8 @@ import {
 } from "../src/evidence/datacenter-price-history.ts";
 
 const fixturePath = "tests/fixtures/datacenter-player-price-graph.html";
-const json1FixturePath = "tests/fixtures/datacenter-player-price-graph-json1.html";
+const json1FixturePath =
+  "tests/fixtures/datacenter-player-price-graph-json1.html";
 
 test("parses timestamped market-reference price points from a saved graph response", async () => {
   const raw = await readFile(fixturePath, "utf8");
@@ -106,10 +107,7 @@ test("rejects duplicate source timestamps", () => {
     </script>
   `;
 
-  assert.throws(
-    () => parseDatacenterPriceGraph(raw),
-    /duplicate timestamp/,
-  );
+  assert.throws(() => parseDatacenterPriceGraph(raw), /duplicate timestamp/);
 });
 
 test("extracts json1 arrays when the assignment contains non-JSON JavaScript", () => {
@@ -235,4 +233,21 @@ test("parses mixed legacy chartData with new Date and plain timestamp entries", 
       { source_timestamp_ms: Date.UTC(2025, 9, 3), value: 1200000 },
     ],
   );
+});
+test("parses non-zero-padded legacy month/day labels", () => {
+  const raw = `
+    <script>
+    var chartData = {
+      time: ["10.30", "10.31", "11.1", "11.2"],
+      value: ["1000000", "1100000", "1050000", "1200000"],
+    };
+    </script>
+  `;
+
+  assert.deepEqual(parseDatacenterPriceGraph(raw, "2025-11-03T09:00:0009:00"), [
+    { source_timestamp_ms: Date.UTC(2025, 9, 30), value: 1000000 },
+    { source_timestamp_ms: Date.UTC(2025, 9, 31), value: 1100000 },
+    { source_timestamp_ms: Date.UTC(2025, 10, 1), value: 1050000 },
+    { source_timestamp_ms: Date.UTC(2025, 10, 2), value: 1200000 },
+  ]);
 });

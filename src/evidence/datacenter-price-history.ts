@@ -64,7 +64,10 @@ function readPositiveInteger(value: unknown, context: string): number {
   return parsed;
 }
 
-function extractAssignedObject(raw: string, variableName: string): string | null {
+function extractAssignedObject(
+  raw: string,
+  variableName: string,
+): string | null {
   const assignment = new RegExp(`\\bvar\\s+${variableName}\\s*=\\s*`).exec(raw);
   if (!assignment) {
     return null;
@@ -72,7 +75,9 @@ function extractAssignedObject(raw: string, variableName: string): string | null
 
   const objectStart = raw.indexOf("{", assignment.index + assignment[0].length);
   if (objectStart < 0) {
-    throw new TypeError(`${variableName} assignment does not contain an object`);
+    throw new TypeError(
+      `${variableName} assignment does not contain an object`,
+    );
   }
 
   let depth = 0;
@@ -147,7 +152,10 @@ function extractArrayProperty(
     throw new TypeError(`${variableName}.${propertyName} must be an array`);
   }
 
-  const arrayStart = objectText.indexOf("[", property.index + property[0].length - 1);
+  const arrayStart = objectText.indexOf(
+    "[",
+    property.index + property[0].length - 1,
+  );
   let depth = 0;
   let quote: '"' | "'" | null = null;
   let escaped = false;
@@ -183,7 +191,9 @@ function extractArrayProperty(
         try {
           const parsed = JSON.parse(arrayText);
           if (!Array.isArray(parsed)) {
-            throw new TypeError(`${variableName}.${propertyName} must be an array`);
+            throw new TypeError(
+              `${variableName}.${propertyName} must be an array`,
+            );
           }
           return parsed;
         } catch (error) {
@@ -197,9 +207,10 @@ function extractArrayProperty(
     }
   }
 
-  throw new TypeError(`${variableName}.${propertyName} has an unterminated array`);
+  throw new TypeError(
+    `${variableName}.${propertyName} has an unterminated array`,
+  );
 }
-
 
 function normalizeKnownObjectKeys(
   objectText: string,
@@ -232,12 +243,18 @@ function normalizeKnownObjectKeys(
 
     if (/[A-Za-z_$]/.test(char ?? "")) {
       let end = index + 1;
-      while (end < objectText.length && /[A-Za-z0-9_$]/.test(objectText[end] ?? "")) {
+      while (
+        end < objectText.length &&
+        /[A-Za-z0-9_$]/.test(objectText[end] ?? "")
+      ) {
         end += 1;
       }
       const identifier = objectText.slice(index, end);
       let cursor = end;
-      while (cursor < objectText.length && /\s/.test(objectText[cursor] ?? "")) {
+      while (
+        cursor < objectText.length &&
+        /\s/.test(objectText[cursor] ?? "")
+      ) {
         cursor += 1;
       }
       if (knownKeys.has(identifier) && objectText[cursor] === ":") {
@@ -339,7 +356,9 @@ function parseTimestampedChartData(chartData: unknown): PricePoint[] {
 
   const points = firstDataset.data.map((entry, index): PricePoint => {
     if (!isRecord(entry)) {
-      throw new TypeError(`chartData.datasets[0].data[${index}] must be an object`);
+      throw new TypeError(
+        `chartData.datasets[0].data[${index}] must be an object`,
+      );
     }
 
     const sourceTimestampMs = readPositiveInteger(
@@ -357,8 +376,10 @@ function parseTimestampedChartData(chartData: unknown): PricePoint[] {
   return finalizePoints(points);
 }
 
-
-function parseExplicitTimestamp(value: unknown, context: string): number | null {
+function parseExplicitTimestamp(
+  value: unknown,
+  context: string,
+): number | null {
   if (typeof value === "number") {
     return readPositiveInteger(value, context);
   }
@@ -392,7 +413,10 @@ function resolveMixedLegacyTimes(
     if (explicitTimestamp !== null) {
       return { kind: "timestamp" as const, value: explicitTimestamp };
     }
-    return { kind: "label" as const, value: parseMonthDay(entry, entryContext) };
+    return {
+      kind: "label" as const,
+      value: parseMonthDay(entry, entryContext),
+    };
   });
 
   const hasLabels = parsed.some((entry) => entry.kind === "label");
@@ -435,9 +459,10 @@ function resolveMixedLegacyTimes(
       }
 
       const upperBound = nextTimestamp ?? observedDateMs + DAY_MS;
-      let year = nextTimestamp === null
-        ? observedYear
-        : new Date(nextTimestamp).getUTCFullYear();
+      let year =
+        nextTimestamp === null
+          ? observedYear
+          : new Date(nextTimestamp).getUTCFullYear();
       timestamp = calendarDateMs(
         year,
         entry.value.month,
@@ -479,7 +504,9 @@ function parseLegacyChartData(
     );
   }
   if (chartData.time.length !== chartData.value.length) {
-    throw new TypeError("chartData.time and chartData.value must have the same length");
+    throw new TypeError(
+      "chartData.time and chartData.value must have the same length",
+    );
   }
 
   const timestamps = resolveMixedLegacyTimes(
@@ -491,22 +518,28 @@ function parseLegacyChartData(
   return finalizePoints(
     timestamps.map((sourceTimestampMs, index) => ({
       source_timestamp_ms: sourceTimestampMs,
-      value: readPositiveInteger(chartData.value[index], `chartData.value[${index}]`),
+      value: readPositiveInteger(
+        chartData.value[index],
+        `chartData.value[${index}]`,
+      ),
     })),
   );
 }
 
-function parseMonthDay(value: unknown, context: string): { month: number; day: number } {
+function parseMonthDay(
+  value: unknown,
+  context: string,
+): { month: number; day: number } {
   if (typeof value !== "string") {
     throw new TypeError(
-      `${context} must be an M.DD date label; got ${JSON.stringify(value)}`,
+      `${context} must be an M.D or M.DD date label; got ${JSON.stringify(value)}`,
     );
   }
 
-  const match = /^(\d{1,2})\.(\d{2})$/.exec(value.trim());
+  const match = /^(\d{1,2})\.(\d{1,2})$/.exec(value.trim());
   if (!match) {
     throw new TypeError(
-      `${context} must be an M.DD date label; got ${JSON.stringify(value)}`,
+      `${context} must be an M.D or M.DD date label; got ${JSON.stringify(value)}`,
     );
   }
 
@@ -518,7 +551,12 @@ function parseMonthDay(value: unknown, context: string): { month: number; day: n
   return { month, day };
 }
 
-function calendarDateMs(year: number, month: number, day: number, context: string): number {
+function calendarDateMs(
+  year: number,
+  month: number,
+  day: number,
+  context: string,
+): number {
   const timestamp = Date.UTC(year, month - 1, day);
   const date = new Date(timestamp);
   if (
@@ -531,7 +569,11 @@ function calendarDateMs(year: number, month: number, day: number, context: strin
   return timestamp;
 }
 
-function kstCalendarDate(observedAt: string): { year: number; month: number; day: number } {
+function kstCalendarDate(observedAt: string): {
+  year: number;
+  month: number;
+  day: number;
+} {
   const parsed = new Date(observedAt);
   if (Number.isNaN(parsed.getTime())) {
     throw new TypeError("observed_at must be an ISO-8601-compatible timestamp");
@@ -558,7 +600,9 @@ function resolveDateLabels(
   context = "json1",
 ): number[] {
   if (labels.length < 2) {
-    throw new TypeError(`${context}.time must contain at least two date labels`);
+    throw new TypeError(
+      `${context}.time must contain at least two date labels`,
+    );
   }
 
   const parsedLabels = labels.map((label, index) =>
@@ -567,7 +611,9 @@ function resolveDateLabels(
 
   for (let index = 1; index < labels.length; index += 1) {
     if (labels[index] === labels[index - 1]) {
-      throw new TypeError(`${context}.time contains duplicate adjacent label ${String(labels[index])}`);
+      throw new TypeError(
+        `${context}.time contains duplicate adjacent label ${String(labels[index])}`,
+      );
     }
   }
 
@@ -587,7 +633,12 @@ function resolveDateLabels(
   }
 
   let lastYear = observed.year;
-  let lastTimestamp = calendarDateMs(lastYear, last.month, last.day, `${context}.time[${lastIndex}]`);
+  let lastTimestamp = calendarDateMs(
+    lastYear,
+    last.month,
+    last.day,
+    `${context}.time[${lastIndex}]`,
+  );
   if (lastTimestamp > observedDateMs) {
     lastYear -= 1;
     lastTimestamp = calendarDateMs(
@@ -636,20 +687,28 @@ function parseLabeledSeries(
   context: string,
 ): PricePoint[] {
   if (time.length !== value.length) {
-    throw new TypeError(`${context}.time and ${context}.value must have the same length`);
+    throw new TypeError(
+      `${context}.time and ${context}.value must have the same length`,
+    );
   }
 
   const timestamps = resolveDateLabels(time, observedAt, context);
   return finalizePoints(
-    timestamps.map((sourceTimestampMs, index): PricePoint => ({
-      source_timestamp_ms: sourceTimestampMs,
-      value: readPositiveInteger(value[index], `${context}.value[${index}]`),
-    })),
+    timestamps.map(
+      (sourceTimestampMs, index): PricePoint => ({
+        source_timestamp_ms: sourceTimestampMs,
+        value: readPositiveInteger(value[index], `${context}.value[${index}]`),
+      }),
+    ),
   );
 }
 
 function parseLabeledJson1(json1: unknown, observedAt: string): PricePoint[] {
-  if (!isRecord(json1) || !Array.isArray(json1.time) || !Array.isArray(json1.value)) {
+  if (
+    !isRecord(json1) ||
+    !Array.isArray(json1.time) ||
+    !Array.isArray(json1.value)
+  ) {
     throw new TypeError("json1.time and json1.value must be arrays");
   }
   return parseLabeledSeries(json1.time, json1.value, observedAt, "json1");
@@ -697,7 +756,9 @@ export function inferNativeGranularity(points: PricePoint[]): string {
     }
     const delta = current.source_timestamp_ms - previous.source_timestamp_ms;
     if (delta <= 0) {
-      throw new TypeError("price points must have strictly increasing timestamps");
+      throw new TypeError(
+        "price points must have strictly increasing timestamps",
+      );
     }
     deltas.push(delta);
   }
