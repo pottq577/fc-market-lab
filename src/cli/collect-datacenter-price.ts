@@ -1,6 +1,10 @@
 import { readFile } from "node:fs/promises";
 
 import {
+  parseSeedCatalogDocument,
+  seedCatalogTargets,
+} from "../catalog/seed-catalog.ts";
+import {
   collectDatacenterPriceTargets,
   type PriceCollectionTarget,
 } from "../collect/datacenter-price.ts";
@@ -27,7 +31,18 @@ function parseTarget(value: unknown, context: string): PriceCollectionTarget {
 }
 
 async function readTargets(args: string[]): Promise<PriceCollectionTarget[]> {
+  const catalogPath = readOption(args, "catalog");
   const targetsPath = readOption(args, "targets");
+
+  if (catalogPath && targetsPath) {
+    throw new TypeError("--catalog and --targets are mutually exclusive");
+  }
+
+  if (catalogPath) {
+    const parsed: unknown = JSON.parse(await readFile(catalogPath, "utf8"));
+    return seedCatalogTargets(parseSeedCatalogDocument(parsed));
+  }
+
   if (targetsPath) {
     const parsed: unknown = JSON.parse(await readFile(targetsPath, "utf8"));
     const values = Array.isArray(parsed)
@@ -45,7 +60,7 @@ async function readTargets(args: string[]): Promise<PriceCollectionTarget[]> {
   const grade = readOption(args, "grade");
   if (!spid || !grade) {
     throw new TypeError(
-      "usage: npm run collect:price -- --spid <spid> --grade <grade> [--output-dir <dir>] [--delay-ms <ms>] OR --targets <json>",
+      "usage: npm run collect:price -- --spid <spid> --grade <grade> [--output-dir <dir>] [--delay-ms <ms>] OR --targets <json> OR --catalog <seed-catalog.json>",
     );
   }
   return [{ spid, grade: Number(grade) }];

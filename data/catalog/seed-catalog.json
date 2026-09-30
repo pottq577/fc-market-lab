@@ -1,0 +1,296 @@
+{
+  "schema_version": 1,
+  "catalog_id": "sample-market-2026-09-29",
+  "status": "FROZEN",
+  "frozen_at": "2026-09-30T13:47:00+09:00",
+  "selection_source": {
+    "source_id": "fconline-datacenter-daily-squad",
+    "source_url": "https://fconline.nexon.com/datacenter/dailysquad",
+    "data_date": "2026-09-29",
+    "observed_at": "2026-09-30T13:47:00+09:00",
+    "method": "OFFICIAL_WEB_UI_DAILY_CHART",
+    "ranker_scope": "official-match-1on1 ranker squads shown by the default Daily Chart view"
+  },
+  "seeds": [
+    {
+      "player_key": "marc-cucurella",
+      "player_name": "마르크 쿠쿠레야",
+      "primary_instrument": {
+        "spid": "863239231",
+        "grade": 1
+      },
+      "selection_observation": {
+        "section": "CLASS_USAGE",
+        "ranker_squad_count": 404,
+        "displayed_share_percent": 21.1
+      },
+      "selection_reason": "Included from the official Daily Chart class-usage table for the frozen source date."
+    },
+    {
+      "player_key": "reece-james",
+      "player_name": "리스 제임스",
+      "primary_instrument": {
+        "spid": "863238074",
+        "grade": 1
+      },
+      "selection_observation": {
+        "section": "CLASS_USAGE",
+        "ranker_squad_count": 201,
+        "displayed_share_percent": 10.5
+      },
+      "selection_reason": "Included from the official Daily Chart class-usage table for the frozen source date."
+    },
+    {
+      "player_key": "dayot-upamecano",
+      "player_name": "다요 우파메카노",
+      "primary_instrument": {
+        "spid": "863229558",
+        "grade": 1
+      },
+      "selection_observation": {
+        "section": "CLASS_USAGE",
+        "ranker_squad_count": 166,
+        "displayed_share_percent": 8.7
+      },
+      "selection_reason": "Included from the official Daily Chart class-usage table for the frozen source date."
+    },
+    {
+      "player_key": "pedri",
+      "player_name": "페드리",
+      "primary_instrument": {
+        "spid": "863251854",
+        "grade": 1
+      },
+      "selection_observation": {
+        "section": "CLASS_USAGE",
+        "ranker_squad_count": 146,
+        "displayed_share_percent": 7.6
+      },
+      "selection_reason": "Included from the official Daily Chart class-usage table for the frozen source date."
+    },
+    {
+      "player_key": "enzo-fernandez",
+      "player_name": "엔소 페르난데스",
+      "primary_instrument": {
+        "spid": "863247090",
+        "grade": 1
+      },
+      "selection_observation": {
+        "section": "CLASS_USAGE",
+        "ranker_squad_count": 136,
+        "displayed_share_percent": 7.1
+      },
+      "selection_reason": "Included from the official Daily Chart class-usage table for the frozen source date."
+    },
+    {
+      "player_key": "cristian-romero",
+      "player_name": "크리스티안 로메로",
+      "primary_instrument": {
+        "spid": "863232488",
+        "grade": 1
+      },
+      "selection_observation": {
+        "section": "CLASS_USAGE",
+        "ranker_squad_count": 128,
+        "displayed_share_percent": 6.7
+      },
+      "selection_reason": "Included from the official Daily Chart class-usage table for the frozen source date."
+    },
+    {
+      "player_key": "theo-hernandez",
+      "player_name": "테오 에르난데스",
+      "primary_instrument": {
+        "spid": "863232656",
+        "grade": 1
+      },
+      "selection_observation": {
+        "section": "CLASS_USAGE",
+        "ranker_squad_count": 127,
+        "displayed_share_percent": 6.6
+      },
+      "selection_reason": "Included from the official Daily Chart class-usage table for the frozen source date."
+    },
+    {
+      "player_key": "alphonso-davies",
+      "player_name": "알폰소 데이비스",
+      "primary_instrument": {
+        "spid": "863234396",
+        "grade": 1
+      },
+      "selection_observation": {
+        "section": "CLASS_USAGE",
+        "ranker_squad_count": 127,
+        "displayed_share_percent": 6.6
+      },
+      "selection_reason": "Included from the official Daily Chart class-usage table for the frozen source date."
+    },
+    {
+      "player_key": "pedro-porro",
+      "player_name": "페드로 포로",
+      "primary_instrument": {
+        "spid": "863243576",
+        "grade": 1
+      },
+      "selection_observation": {
+        "section": "CLASS_USAGE",
+        "ranker_squad_count": 123,
+        "displayed_share_percent": 6.4
+      },
+      "selection_reason": "Included from the official Daily Chart class-usage table for the frozen source date."
+    },
+    {
+      "player_key": "ezri-konsa",
+      "player_name": "에즈리 콘사",
+      "primary_instrument": {
+        "spid": "863227678",
+        "grade": 1
+      },
+      "selection_observation": {
+        "section": "CLASS_USAGE",
+        "ranker_squad_count": 120,
+        "displayed_share_percent": 6.3
+      },
+      "selection_reason": "Included from the official Daily Chart class-usage table for the frozen source date."
+    },
+    {
+      "player_key": "myles-lewis-skelly",
+      "player_name": "M. 루이스-스켈리",
+      "primary_instrument": {
+        "spid": "863278773",
+        "grade": 1
+      },
+      "selection_observation": {
+        "section": "CLASS_USAGE",
+        "ranker_squad_count": 120,
+        "displayed_share_percent": 6.3
+      },
+      "selection_reason": "Included from the official Daily Chart class-usage table for the frozen source date."
+    },
+    {
+      "player_key": "malo-gusto",
+      "player_name": "말로 귀스토",
+      "primary_instrument": {
+        "spid": "863259307",
+        "grade": 1
+      },
+      "selection_observation": {
+        "section": "CLASS_USAGE",
+        "ranker_squad_count": 116,
+        "displayed_share_percent": 6.1
+      },
+      "selection_reason": "Included from the official Daily Chart class-usage table for the frozen source date."
+    },
+    {
+      "player_key": "joao-cancelo",
+      "player_name": "주앙 칸셀루",
+      "primary_instrument": {
+        "spid": "863210514",
+        "grade": 1
+      },
+      "selection_observation": {
+        "section": "CLASS_USAGE",
+        "ranker_squad_count": 111,
+        "displayed_share_percent": 5.8
+      },
+      "selection_reason": "Included from the official Daily Chart class-usage table for the frozen source date."
+    },
+    {
+      "player_key": "pau-cubarsi",
+      "player_name": "파우 쿠바르시",
+      "primary_instrument": {
+        "spid": "863278046",
+        "grade": 1
+      },
+      "selection_observation": {
+        "section": "CLASS_USAGE",
+        "ranker_squad_count": 108,
+        "displayed_share_percent": 5.6
+      },
+      "selection_reason": "Included from the official Daily Chart class-usage table for the frozen source date."
+    },
+    {
+      "player_key": "nahuel-molina",
+      "player_name": "나우엘 몰리나",
+      "primary_instrument": {
+        "spid": "863233084",
+        "grade": 1
+      },
+      "selection_observation": {
+        "section": "CLASS_USAGE",
+        "ranker_squad_count": 104,
+        "displayed_share_percent": 5.4
+      },
+      "selection_reason": "Included from the official Daily Chart class-usage table for the frozen source date."
+    },
+    {
+      "player_key": "denzel-dumfries",
+      "player_name": "덴젤 둠프리스",
+      "primary_instrument": {
+        "spid": "863233096",
+        "grade": 1
+      },
+      "selection_observation": {
+        "section": "CLASS_USAGE",
+        "ranker_squad_count": 97,
+        "displayed_share_percent": 5.1
+      },
+      "selection_reason": "Included from the official Daily Chart class-usage table for the frozen source date."
+    },
+    {
+      "player_key": "mikel-merino",
+      "player_name": "미켈 메리노",
+      "primary_instrument": {
+        "spid": "863225193",
+        "grade": 1
+      },
+      "selection_observation": {
+        "section": "CLASS_USAGE",
+        "ranker_squad_count": 87,
+        "displayed_share_percent": 4.5
+      },
+      "selection_reason": "Included from the official Daily Chart class-usage table for the frozen source date."
+    },
+    {
+      "player_key": "martin-zubimendi",
+      "player_name": "수비멘디",
+      "primary_instrument": {
+        "spid": "863248148",
+        "grade": 1
+      },
+      "selection_observation": {
+        "section": "CLASS_USAGE",
+        "ranker_squad_count": 87,
+        "displayed_share_percent": 4.5
+      },
+      "selection_reason": "Included from the official Daily Chart class-usage table for the frozen source date."
+    },
+    {
+      "player_key": "luis-figo",
+      "player_name": "루이스 피구",
+      "primary_instrument": {
+        "spid": "868005589",
+        "grade": 1
+      },
+      "selection_observation": {
+        "section": "POSITION_USAGE",
+        "ranker_squad_count": 176,
+        "displayed_share_percent": 0.1
+      },
+      "selection_reason": "Included from the official Daily Chart position-usage table to complete the 20-player frozen seed with current ranker-use evidence."
+    },
+    {
+      "player_key": "william-saliba",
+      "player_name": "윌리암 살리바",
+      "primary_instrument": {
+        "spid": "856243715",
+        "grade": 1
+      },
+      "selection_observation": {
+        "section": "POSITION_USAGE",
+        "ranker_squad_count": 169,
+        "displayed_share_percent": 0.1
+      },
+      "selection_reason": "Included from the official Daily Chart position-usage table to complete the 20-player frozen seed with current ranker-use evidence."
+    }
+  ]
+}

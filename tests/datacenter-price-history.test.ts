@@ -244,10 +244,13 @@ test("parses non-zero-padded legacy month/day labels", () => {
     </script>
   `;
 
-  assert.deepEqual(parseDatacenterPriceGraph(raw, "2025-11-03T09:00:0009:00"), [
-    { source_timestamp_ms: Date.UTC(2025, 9, 30), value: 1000000 },
-    { source_timestamp_ms: Date.UTC(2025, 9, 31), value: 1100000 },
-    { source_timestamp_ms: Date.UTC(2025, 10, 1), value: 1050000 },
-    { source_timestamp_ms: Date.UTC(2025, 10, 2), value: 1200000 },
-  ]);
+  assert.deepEqual(
+    parseDatacenterPriceGraph(raw, "2025-11-03T09:00:00+09:00"),
+    [
+      { source_timestamp_ms: Date.UTC(2025, 9, 30), value: 1000000 },
+      { source_timestamp_ms: Date.UTC(2025, 9, 31), value: 1100000 },
+      { source_timestamp_ms: Date.UTC(2025, 10, 1), value: 1050000 },
+      { source_timestamp_ms: Date.UTC(2025, 10, 2), value: 1200000 },
+    ],
+  );
 });

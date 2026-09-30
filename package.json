@@ -11,8 +11,12 @@
     "gate:0a:require-ready": "node --experimental-strip-types src/cli/gate-0a.ts data/evidence/source-viability.json --require-ready",
     "evidence:datacenter-price": "node --experimental-strip-types src/cli/datacenter-price-evidence.ts",
     "collect:price": "node --experimental-strip-types src/cli/collect-datacenter-price.ts",
+    "catalog:check": "node --experimental-strip-types src/cli/seed-catalog.ts data/catalog/seed-catalog.json",
+    "catalog:targets": "node --experimental-strip-types src/cli/seed-catalog.ts data/catalog/seed-catalog.json --targets",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
-    "check": "npm test && npm run gate:0a"
+    "check": "npm test && npm run catalog:check && npm run gate:0a:require-ready",
+    "gate:0b": "node --experimental-strip-types src/cli/gate-0b.ts --catalog data/catalog/seed-catalog.json --raw-dir data/raw/datacenter-price",
+    "gate:0b:require-ready": "node --experimental-strip-types src/cli/gate-0b.ts --catalog data/catalog/seed-catalog.json --raw-dir data/raw/datacenter-price --require-ready"
   },
   "devDependencies": {
     "@types/node": "^26.6.3"
