@@ -135,6 +135,87 @@ function parseAssignedObject(
   }
 }
 
+function extractArrayProperty(objectText: string, propertyName: string): unknown[] {
+  const property = new RegExp(
+    `(?:["']${propertyName}["']|\\b${propertyName}\\b)\\s*:\\s*\\[`,
+  ).exec(objectText);
+  if (!property) {
+    throw new TypeError(`json1.${propertyName} must be an array`);
+  }
+
+  const arrayStart = objectText.indexOf("[", property.index + property[0].length - 1);
+  let depth = 0;
+  let quote: '"' | "'" | null = null;
+  let escaped = false;
+
+  for (let index = arrayStart; index < objectText.length; index += 1) {
+    const char = objectText[index];
+
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === "[") {
+      depth += 1;
+      continue;
+    }
+    if (char === "]") {
+      depth -= 1;
+      if (depth === 0) {
+        const arrayText = objectText
+          .slice(arrayStart, index + 1)
+          .replace(/,\s*]/g, "]");
+        try {
+          const parsed = JSON.parse(arrayText);
+          if (!Array.isArray(parsed)) {
+            throw new TypeError(`json1.${propertyName} must be an array`);
+          }
+          return parsed;
+        } catch (error) {
+          throw new TypeError(
+            `json1.${propertyName} must be JSON-compatible: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        }
+      }
+    }
+  }
+
+  throw new TypeError(`json1.${propertyName} has an unterminated array`);
+}
+
+function parseJson1Assignment(raw: string): unknown | null {
+  const objectText = extractAssignedObject(raw, "json1");
+  if (objectText === null) {
+    return null;
+  }
+
+  const normalized = objectText.replace(/,\s*([}\]])/g, "$1");
+  try {
+    return JSON.parse(normalized);
+  } catch {
+    // The live Data Center response is JavaScript, not an API contract. Keep the
+    // parser tolerant of extra JS-only properties while extracting only the two
+    // arrays that define the price series.
+    return {
+      time: extractArrayProperty(objectText, "time"),
+      value: extractArrayProperty(objectText, "value"),
+    };
+  }
+}
+
 function finalizePoints(points: PricePoint[]): PricePoint[] {
   if (points.length < 2) {
     throw new TypeError("price graph must contain at least two points");
@@ -340,7 +421,7 @@ export function parseDatacenterPriceGraph(
     return parseTimestampedChartData(chartData);
   }
 
-  const json1 = parseAssignedObject(raw, "json1", true);
+  const json1 = parseJson1Assignment(raw);
   if (json1 !== null) {
     if (!observedAt) {
       throw new TypeError("observed_at is required for json1 M.DD date labels");

@@ -111,3 +111,23 @@ test("rejects duplicate source timestamps", () => {
     /duplicate timestamp/,
   );
 });
+
+test("extracts json1 arrays when the assignment contains non-JSON JavaScript", () => {
+  const raw = `
+    <script>
+    var json1 = {
+      time: ["12.30", "12.31", "1.01", "1.02",],
+      value: ["1000000", "1100000", "1050000", "1200000",],
+      formatter: function (value) { return value; },
+    };
+    </script>
+  `;
+
+  const points = parseDatacenterPriceGraph(raw, "2026-01-03T09:00:00+09:00");
+  assert.deepEqual(points, [
+    { source_timestamp_ms: Date.UTC(2025, 11, 30), value: 1000000 },
+    { source_timestamp_ms: Date.UTC(2025, 11, 31), value: 1100000 },
+    { source_timestamp_ms: Date.UTC(2026, 0, 1), value: 1050000 },
+    { source_timestamp_ms: Date.UTC(2026, 0, 2), value: 1200000 },
+  ]);
+});
