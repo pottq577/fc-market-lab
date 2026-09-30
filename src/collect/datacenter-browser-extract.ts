@@ -232,12 +232,71 @@ function teamColorsFromRecord(record: Record<string, unknown>): string[] {
   return names;
 }
 
+function cleanPageLine(line: string): string {
+  return line
+    .replace(/^Image(?::\s*|\s+)/i, "")
+    .replace(/^\[Button:\s*([^\]]+)\]$/i, "$1")
+    .trim();
+}
+
 function pageLines(text: string): string[] {
   return text
     .replace(/\r/g, "\n")
     .split(/\n+/)
-    .map((line) => line.trim())
+    .map(cleanPageLine)
     .filter(Boolean);
+}
+
+function recordFromRenderedPageText(
+  text: string,
+  spid: string,
+  playerName: string,
+): Record<string, unknown> | null {
+  const lines = pageLines(text);
+  const playerIndexes = lines
+    .map((line, index) => (line === playerName ? index : -1))
+    .filter((index) => index >= 0);
+
+  for (const playerIndex of playerIndexes) {
+    let positionIndex = -1;
+    let position: string | null = null;
+    let ovr: number | null = null;
+    const end = Math.min(lines.length, playerIndex + 6);
+    for (let index = playerIndex + 1; index < end; index += 1) {
+      const match = /^([A-Z]{1,4})\s+(\d{2,3})$/.exec(lines[index]!);
+      if (!match) {
+        continue;
+      }
+      positionIndex = index;
+      position = normalizePositionName(match[1]);
+      ovr = toPositiveInteger(match[2]);
+      break;
+    }
+    if (positionIndex < 0 || !position || ovr === null) {
+      continue;
+    }
+
+    let pay: number | null = null;
+    const salaryStart = Math.max(0, playerIndex - 8);
+    for (let index = playerIndex - 1; index >= salaryStart; index -= 1) {
+      const line = lines[index]!;
+      if (!/^\d{1,3}$/.test(line)) {
+        continue;
+      }
+      const candidate = toPositiveInteger(line);
+      if (candidate !== null && candidate <= 99) {
+        pay = candidate;
+        break;
+      }
+    }
+    if (pay === null) {
+      continue;
+    }
+
+    return { spid, name: playerName, pay, ovr, position };
+  }
+
+  return null;
 }
 
 function linesBetween(
@@ -348,9 +407,17 @@ export function extractDatacenterMetadata(input: {
   if (!/^\d+$/.test(input.spid)) {
     throw new TypeError("spid must contain digits only");
   }
-  const record = findRecord(input.response_bodies, input.spid);
+  const record =
+    findRecord(input.response_bodies, input.spid) ??
+    recordFromRenderedPageText(
+      input.page_text,
+      input.spid,
+      input.expected_player_name,
+    );
   if (!record) {
-    throw new TypeError(`no Data Center player record found for spid=${input.spid}`);
+    throw new TypeError(
+      `no Data Center player record or rendered header found for spid=${input.spid}`,
+    );
   }
   const salary = toPositiveInteger(record.pay);
   if (salary === null) {
