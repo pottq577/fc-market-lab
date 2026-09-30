@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -173,12 +174,6 @@ export async function collectDatacenterPriceTarget(
   const options = normalizeOptions(inputOptions);
   const observedAt = options.now().toISOString();
   const { response, raw } = await fetchWithRetry(target, options);
-  const evidence = buildDatacenterPriceCaptureEvidence({
-    raw,
-    spid: target.spid,
-    grade: target.grade,
-    observed_at: observedAt,
-  });
 
   const dateDir = join(options.outputDir, observedAt.slice(0, 10));
   await mkdir(dateDir, { recursive: true });
@@ -186,14 +181,53 @@ export async function collectDatacenterPriceTarget(
   const basename = `${target.spid}-g${target.grade}-${fileSafeTimestamp(observedAt)}`;
   const rawPath = join(dateDir, `${basename}.html`);
   const metadataPath = join(dateDir, `${basename}.json`);
+  const rawSha256 = `sha256:${createHash("sha256").update(raw).digest("hex")}`;
 
   await writeFile(rawPath, raw, { encoding: "utf8", flag: "wx" });
+
+  let evidence;
+  try {
+    evidence = buildDatacenterPriceCaptureEvidence({
+      raw,
+      spid: target.spid,
+      grade: target.grade,
+      observed_at: observedAt,
+    });
+  } catch (error) {
+    const parseError = error instanceof Error ? error.message : String(error);
+    await writeFile(
+      metadataPath,
+      `${JSON.stringify(
+        {
+          collector: "experimental-datacenter-price",
+          collector_version: 2,
+          source_url: options.endpoint,
+          method: "POST",
+          request: { spid: target.spid, n1strong: target.grade },
+          response_status: response.status,
+          response_content_type: response.headers.get("content-type"),
+          observed_at: observedAt,
+          raw_sha256: rawSha256,
+          parse_status: "FAILED",
+          parse_error: parseError,
+        },
+        null,
+        2,
+      )}\n`,
+      { encoding: "utf8", flag: "wx" },
+    );
+    throw new TypeError(
+      `Data Center price response could not be parsed; raw response preserved at ${rawPath}: ${parseError}`,
+      { cause: error },
+    );
+  }
+
   await writeFile(
     metadataPath,
     `${JSON.stringify(
       {
         collector: "experimental-datacenter-price",
-        collector_version: 1,
+        collector_version: 2,
         source_url: options.endpoint,
         method: "POST",
         request: { spid: target.spid, n1strong: target.grade },
@@ -201,6 +235,7 @@ export async function collectDatacenterPriceTarget(
         response_content_type: response.headers.get("content-type"),
         observed_at: observedAt,
         raw_sha256: evidence.raw_sha256,
+        parse_status: "PARSED",
         evidence,
       },
       null,

@@ -51,6 +51,8 @@ test("collects one target with the expected public Data Center POST contract", a
   assert.equal(metadata.request.spid, "851224371");
   assert.equal(metadata.request.n1strong, 1);
   assert.equal(metadata.raw_sha256, result.raw_sha256);
+  assert.equal(metadata.parse_status, "PARSED");
+  assert.equal(metadata.collector_version, 2);
 });
 
 test("retries 5xx with backoff and then succeeds", async () => {
@@ -147,4 +149,42 @@ test("rejects collection delays below the safety floor", async () => {
       ),
     /delayMs must be an integer >= 1000/,
   );
+});
+
+
+test("preserves raw response and failure metadata when parsing fails", async () => {
+  const outputDir = await mkdtemp(join(tmpdir(), "fc-market-price-"));
+  const malformed = `
+<script>
+var chartData = { formatter: function () { return 1; } };
+</script>
+`;
+  const fetchImpl = async () =>
+    new Response(malformed, {
+      status: 200,
+      headers: { "content-type": "text/html; charset=utf-8" },
+    });
+
+  const rawPath = join(
+    outputDir,
+    "2026-01-03",
+    "851224371-g1-2026-01-03T00-00-00-000Z.html",
+  );
+  const metadataPath = rawPath.replace(/\.html$/, ".json");
+
+  await assert.rejects(
+    () =>
+      collectDatacenterPriceTarget(
+        { spid: "851224371", grade: 1 },
+        { outputDir, fetchImpl: fetchImpl as typeof fetch, now: fixedNow },
+      ),
+    /raw response preserved at/,
+  );
+
+  assert.equal(await readFile(rawPath, "utf8"), malformed);
+  const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
+  assert.equal(metadata.collector_version, 2);
+  assert.equal(metadata.parse_status, "FAILED");
+  assert.match(metadata.raw_sha256, /^sha256:[0-9a-f]{64}$/);
+  assert.match(metadata.parse_error, /supported price series/);
 });

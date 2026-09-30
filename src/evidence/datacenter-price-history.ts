@@ -135,12 +135,16 @@ function parseAssignedObject(
   }
 }
 
-function extractArrayProperty(objectText: string, propertyName: string): unknown[] {
+function extractArrayProperty(
+  objectText: string,
+  propertyName: string,
+  variableName = "json1",
+): unknown[] {
   const property = new RegExp(
     `(?:["']${propertyName}["']|\\b${propertyName}\\b)\\s*:\\s*\\[`,
   ).exec(objectText);
   if (!property) {
-    throw new TypeError(`json1.${propertyName} must be an array`);
+    throw new TypeError(`${variableName}.${propertyName} must be an array`);
   }
 
   const arrayStart = objectText.indexOf("[", property.index + property[0].length - 1);
@@ -179,12 +183,12 @@ function extractArrayProperty(objectText: string, propertyName: string): unknown
         try {
           const parsed = JSON.parse(arrayText);
           if (!Array.isArray(parsed)) {
-            throw new TypeError(`json1.${propertyName} must be an array`);
+            throw new TypeError(`${variableName}.${propertyName} must be an array`);
           }
           return parsed;
         } catch (error) {
           throw new TypeError(
-            `json1.${propertyName} must be JSON-compatible: ${
+            `${variableName}.${propertyName} must be JSON-compatible: ${
               error instanceof Error ? error.message : String(error)
             }`,
           );
@@ -193,7 +197,90 @@ function extractArrayProperty(objectText: string, propertyName: string): unknown
     }
   }
 
-  throw new TypeError(`json1.${propertyName} has an unterminated array`);
+  throw new TypeError(`${variableName}.${propertyName} has an unterminated array`);
+}
+
+
+function normalizeKnownObjectKeys(
+  objectText: string,
+  knownKeys: ReadonlySet<string>,
+): string {
+  let normalized = "";
+  let quote: '"' | "'" | null = null;
+  let escaped = false;
+
+  for (let index = 0; index < objectText.length; index += 1) {
+    const char = objectText[index];
+
+    if (quote) {
+      normalized += char;
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char;
+      normalized += char;
+      continue;
+    }
+
+    if (/[A-Za-z_$]/.test(char ?? "")) {
+      let end = index + 1;
+      while (end < objectText.length && /[A-Za-z0-9_$]/.test(objectText[end] ?? "")) {
+        end += 1;
+      }
+      const identifier = objectText.slice(index, end);
+      let cursor = end;
+      while (cursor < objectText.length && /\s/.test(objectText[cursor] ?? "")) {
+        cursor += 1;
+      }
+      if (knownKeys.has(identifier) && objectText[cursor] === ":") {
+        normalized += `"${identifier}"`;
+        index = end - 1;
+        continue;
+      }
+    }
+
+    normalized += char;
+  }
+
+  return normalized.replace(/,\s*([}\]])/g, "$1");
+}
+
+function parseChartDataAssignment(raw: string): unknown | null {
+  const objectText = extractAssignedObject(raw, "chartData");
+  if (objectText === null) {
+    return null;
+  }
+
+  const normalized = normalizeKnownObjectKeys(
+    objectText,
+    new Set(["time", "value", "datasets", "data", "x", "y"]),
+  );
+  try {
+    return JSON.parse(normalized);
+  } catch (error) {
+    // Older/live variants may include unrelated JavaScript-only properties.
+    // The price series itself is still recoverable from its time/value arrays.
+    try {
+      return {
+        time: extractArrayProperty(objectText, "time", "chartData"),
+        value: extractArrayProperty(objectText, "value", "chartData"),
+      };
+    } catch {
+      throw new TypeError(
+        `chartData must contain a supported price series: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
 }
 
 function parseJson1Assignment(raw: string): unknown | null {
@@ -270,6 +357,53 @@ function parseTimestampedChartData(chartData: unknown): PricePoint[] {
   return finalizePoints(points);
 }
 
+
+function parseLegacyChartData(
+  chartData: Record<string, unknown>,
+  observedAt?: string,
+): PricePoint[] {
+  if (!Array.isArray(chartData.time) || !Array.isArray(chartData.value)) {
+    throw new TypeError(
+      "chartData must contain datasets[0].data or matching time/value arrays",
+    );
+  }
+  if (chartData.time.length !== chartData.value.length) {
+    throw new TypeError("chartData.time and chartData.value must have the same length");
+  }
+
+  const timestampPattern = /^(?:new\s+Date\()?([0-9]+)\)?$/;
+  const explicitTimestamps = chartData.time.map((entry) => {
+    if (typeof entry === "number") {
+      return readPositiveInteger(entry, "chartData.time");
+    }
+    if (typeof entry !== "string") {
+      return null;
+    }
+    const match = timestampPattern.exec(entry.trim());
+    return match ? readPositiveInteger(match[1], "chartData.time") : null;
+  });
+
+  if (explicitTimestamps.every((timestamp) => timestamp !== null)) {
+    return finalizePoints(
+      explicitTimestamps.map((sourceTimestampMs, index) => ({
+        source_timestamp_ms: sourceTimestampMs as number,
+        value: readPositiveInteger(chartData.value[index], `chartData.value[${index}]`),
+      })),
+    );
+  }
+
+  if (!explicitTimestamps.every((timestamp) => timestamp === null)) {
+    throw new TypeError(
+      "chartData.time must use one consistent representation: timestamps or M.DD labels",
+    );
+  }
+  if (!observedAt) {
+    throw new TypeError("observed_at is required for chartData M.DD date labels");
+  }
+
+  return parseLabeledSeries(chartData.time, chartData.value, observedAt, "chartData");
+}
+
 function parseMonthDay(value: unknown, context: string): { month: number; day: number } {
   if (typeof value !== "string") {
     throw new TypeError(`${context} must be an M.DD date label`);
@@ -322,18 +456,22 @@ function kstCalendarDate(observedAt: string): { year: number; month: number; day
   };
 }
 
-function resolveDateLabels(labels: unknown[], observedAt: string): number[] {
+function resolveDateLabels(
+  labels: unknown[],
+  observedAt: string,
+  context = "json1",
+): number[] {
   if (labels.length < 2) {
-    throw new TypeError("json1.time must contain at least two date labels");
+    throw new TypeError(`${context}.time must contain at least two date labels`);
   }
 
   const parsedLabels = labels.map((label, index) =>
-    parseMonthDay(label, `json1.time[${index}]`),
+    parseMonthDay(label, `${context}.time[${index}]`),
   );
 
   for (let index = 1; index < labels.length; index += 1) {
     if (labels[index] === labels[index - 1]) {
-      throw new TypeError(`json1.time contains duplicate adjacent label ${String(labels[index])}`);
+      throw new TypeError(`${context}.time contains duplicate adjacent label ${String(labels[index])}`);
     }
   }
 
@@ -349,18 +487,18 @@ function resolveDateLabels(labels: unknown[], observedAt: string): number[] {
   const lastIndex = parsedLabels.length - 1;
   const last = parsedLabels[lastIndex];
   if (!last) {
-    throw new TypeError("json1.time must contain date labels");
+    throw new TypeError(`${context}.time must contain date labels`);
   }
 
   let lastYear = observed.year;
-  let lastTimestamp = calendarDateMs(lastYear, last.month, last.day, `json1.time[${lastIndex}]`);
+  let lastTimestamp = calendarDateMs(lastYear, last.month, last.day, `${context}.time[${lastIndex}]`);
   if (lastTimestamp > observedDateMs) {
     lastYear -= 1;
     lastTimestamp = calendarDateMs(
       lastYear,
       last.month,
       last.day,
-      `json1.time[${lastIndex}]`,
+      `${context}.time[${lastIndex}]`,
     );
   }
   resolved[lastIndex] = lastTimestamp;
@@ -369,7 +507,7 @@ function resolveDateLabels(labels: unknown[], observedAt: string): number[] {
     const current = parsedLabels[index];
     const nextTimestamp = resolved[index + 1];
     if (!current || nextTimestamp === undefined) {
-      throw new TypeError("failed to resolve json1 date labels");
+      throw new TypeError(`failed to resolve ${context} date labels`);
     }
 
     const nextYear = new Date(nextTimestamp).getUTCFullYear();
@@ -378,7 +516,7 @@ function resolveDateLabels(labels: unknown[], observedAt: string): number[] {
       candidateYear,
       current.month,
       current.day,
-      `json1.time[${index}]`,
+      `${context}.time[${index}]`,
     );
     if (candidate >= nextTimestamp) {
       candidateYear -= 1;
@@ -386,7 +524,7 @@ function resolveDateLabels(labels: unknown[], observedAt: string): number[] {
         candidateYear,
         current.month,
         current.day,
-        `json1.time[${index}]`,
+        `${context}.time[${index}]`,
       );
     }
     resolved[index] = candidate;
@@ -395,30 +533,45 @@ function resolveDateLabels(labels: unknown[], observedAt: string): number[] {
   return resolved;
 }
 
+function parseLabeledSeries(
+  time: unknown[],
+  value: unknown[],
+  observedAt: string,
+  context: string,
+): PricePoint[] {
+  if (time.length !== value.length) {
+    throw new TypeError(`${context}.time and ${context}.value must have the same length`);
+  }
+
+  const timestamps = resolveDateLabels(time, observedAt, context);
+  return finalizePoints(
+    timestamps.map((sourceTimestampMs, index): PricePoint => ({
+      source_timestamp_ms: sourceTimestampMs,
+      value: readPositiveInteger(value[index], `${context}.value[${index}]`),
+    })),
+  );
+}
+
 function parseLabeledJson1(json1: unknown, observedAt: string): PricePoint[] {
   if (!isRecord(json1) || !Array.isArray(json1.time) || !Array.isArray(json1.value)) {
     throw new TypeError("json1.time and json1.value must be arrays");
   }
-  if (json1.time.length !== json1.value.length) {
-    throw new TypeError("json1.time and json1.value must have the same length");
-  }
-
-  const timestamps = resolveDateLabels(json1.time, observedAt);
-  const points = timestamps.map((sourceTimestampMs, index): PricePoint => ({
-    source_timestamp_ms: sourceTimestampMs,
-    value: readPositiveInteger(json1.value[index], `json1.value[${index}]`),
-  }));
-
-  return finalizePoints(points);
+  return parseLabeledSeries(json1.time, json1.value, observedAt, "json1");
 }
 
 export function parseDatacenterPriceGraph(
   raw: string,
   observedAt?: string,
 ): PricePoint[] {
-  const chartData = parseAssignedObject(raw, "chartData");
+  const chartData = parseChartDataAssignment(raw);
   if (chartData !== null) {
-    return parseTimestampedChartData(chartData);
+    if (!isRecord(chartData)) {
+      throw new TypeError("chartData must be an object");
+    }
+    if (Array.isArray(chartData.datasets)) {
+      return parseTimestampedChartData(chartData);
+    }
+    return parseLegacyChartData(chartData, observedAt);
   }
 
   const json1 = parseJson1Assignment(raw);

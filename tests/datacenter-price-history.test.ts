@@ -131,3 +131,63 @@ test("extracts json1 arrays when the assignment contains non-JSON JavaScript", (
     { source_timestamp_ms: Date.UTC(2026, 0, 2), value: 1200000 },
   ]);
 });
+
+test("parses live legacy chartData with unquoted time/value keys", () => {
+  const raw = `
+    <script>
+    var chartData = {
+      time: ["12.30", "12.31", "1.01", "1.02",],
+      value: ["1000000", "1100000", "1050000", "1200000",],
+    };
+    </script>
+  `;
+
+  const points = parseDatacenterPriceGraph(raw, "2026-01-03T09:00:00+09:00");
+  assert.deepEqual(points, [
+    { source_timestamp_ms: Date.UTC(2025, 11, 30), value: 1000000 },
+    { source_timestamp_ms: Date.UTC(2025, 11, 31), value: 1100000 },
+    { source_timestamp_ms: Date.UTC(2026, 0, 1), value: 1050000 },
+    { source_timestamp_ms: Date.UTC(2026, 0, 2), value: 1200000 },
+  ]);
+});
+
+test("parses legacy chartData timestamp strings", () => {
+  const raw = `
+    <script>
+    var chartData = {
+      time: [
+        "new Date(1790262000000)",
+        "new Date(1790348400000)",
+        "new Date(1790521200000)",
+      ],
+      value: ["1000000", "1100000", "1050000"],
+    };
+    </script>
+  `;
+
+  assert.deepEqual(parseDatacenterPriceGraph(raw), [
+    { source_timestamp_ms: 1790262000000, value: 1000000 },
+    { source_timestamp_ms: 1790348400000, value: 1100000 },
+    { source_timestamp_ms: 1790521200000, value: 1050000 },
+  ]);
+});
+
+test("parses timestamped chartData with unquoted known keys", () => {
+  const raw = `
+    <script>
+    var chartData = {
+      datasets: [{
+        data: [
+          {x: 1790262000000, y: 1000000},
+          {x: 1790348400000, y: 1100000},
+        ],
+      }],
+    };
+    </script>
+  `;
+
+  assert.deepEqual(parseDatacenterPriceGraph(raw), [
+    { source_timestamp_ms: 1790262000000, value: 1000000 },
+    { source_timestamp_ms: 1790348400000, value: 1100000 },
+  ]);
+});
