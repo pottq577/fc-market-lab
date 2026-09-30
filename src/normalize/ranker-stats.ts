@@ -56,13 +56,44 @@ function normalizeUtcTimestamp(value: string, field: string): string {
   return timestamp.toISOString();
 }
 
+function numericValue(value: unknown, field: string): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const candidate = value.trim();
+    if (candidate !== "" && /^-?(?:\d+|\d*\.\d+)$/.test(candidate)) {
+      const parsed = Number(candidate);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+  }
+  throw new TypeError(`${field} must be a number or numeric string`);
+}
+
+function integerField(
+  record: Record<string, unknown>,
+  key: string,
+  context: string,
+  minimum: number,
+): number {
+  const value = numericValue(record[key], `${context}.${key}`);
+  if (!Number.isSafeInteger(value) || value < minimum) {
+    throw new TypeError(
+      `${context}.${key} must be an integer greater than or equal to ${minimum}`,
+    );
+  }
+  return value;
+}
+
 function numberField(
   record: Record<string, unknown>,
   key: keyof RankerStatus,
   context: string,
 ): number {
-  const value = record[key];
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+  const value = numericValue(record[key], `${context}.${key}`);
+  if (value < 0) {
     throw new TypeError(`${context}.${key} must be a non-negative number`);
   }
   return value;
@@ -80,12 +111,11 @@ function parseRows(artifact: RankerStatsArtifact): RankerRow[] {
 
   return value.map((item, index) => {
     const context = `rankerStats[${index}]`;
-    if (!isRecord(item) || !Number.isInteger(item.spId)) {
-      throw new TypeError(`${context}.spId must be an integer`);
+    if (!isRecord(item)) {
+      throw new TypeError(`${context} must be an object`);
     }
-    if (!Number.isInteger(item.spPosition) || (item.spPosition as number) < 0) {
-      throw new TypeError(`${context}.spPosition must be a non-negative integer`);
-    }
+    const spId = integerField(item, "spId", context, 1);
+    const spPosition = integerField(item, "spPosition", context, 0);
     if (!isRecord(item.status)) {
       throw new TypeError(`${context}.status must be an object`);
     }
@@ -93,8 +123,8 @@ function parseRows(artifact: RankerStatsArtifact): RankerRow[] {
       throw new TypeError(`${context}.createDate must be a timestamp`);
     }
 
-    const spid = String(item.spId);
-    const position_code = item.spPosition as number;
+    const spid = String(spId);
+    const position_code = spPosition;
     const key = `${spid}:${position_code}`;
     if (!requested.has(key)) {
       throw new TypeError(`ranker stats returned unrequested target ${key}`);

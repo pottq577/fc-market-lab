@@ -205,6 +205,56 @@ test("normalizes ranker stats as card-level observations and is idempotent", asy
   }
 });
 
+test("normalizes numeric-string ranker fields at the API boundary", async () => {
+  const db = await tempDb();
+  try {
+    seedCard(db);
+    const row = responseRow();
+    const artifact: RankerStatsArtifact = {
+      source_url: "https://open.api.nexon.com/fconline/v1/ranker-stats",
+      observed_at: observedAt,
+      matchtype: 50,
+      targets: [{ spid: "863239231", position_code: 3 }],
+      raw: Buffer.from(
+        JSON.stringify([
+          {
+            ...row,
+            spId: String(row.spId),
+            spPosition: String(row.spPosition),
+            status: Object.fromEntries(
+              Object.entries(row.status).map(([key, value]) => [key, String(value)]),
+            ),
+          },
+        ]),
+      ),
+    };
+
+    const result = normalizeRankerStats(db, [artifact]);
+    assert.deepEqual(result, {
+      source_snapshots_created: 1,
+      usage_points_created: 1,
+      returned_rows: 1,
+      missing_targets: [],
+    });
+
+    const stored = db
+      .prepare(
+        `SELECT spid, appearances, position_code, performance_metrics_json
+         FROM usage_point WHERE observation_type = 'OPEN_API_RANKER_STATS'`,
+      )
+      .get() as Record<string, unknown>;
+    assert.equal(stored.spid, "863239231");
+    assert.equal(stored.appearances, 137);
+    assert.equal(stored.position_code, 3);
+    assert.equal(
+      (JSON.parse(stored.performance_metrics_json as string) as { dribble: number }).dribble,
+      80.5,
+    );
+  } finally {
+    db.close();
+  }
+});
+
 test("reports a requested card missing from the ranker response without inventing a row", async () => {
   const db = await tempDb();
   try {
