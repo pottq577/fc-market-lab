@@ -17,6 +17,23 @@ function readOption(args: string[], name: string): string | undefined {
   return index >= 0 ? args[index + 1] : undefined;
 }
 
+function countCohortMembershipsById(
+  db: ReturnType<typeof openMarketDatabase>,
+): Record<string, number> {
+  const rows = db
+    .prepare(
+      `SELECT cd.cohort_id, COUNT(cm.instrument_id) AS count
+       FROM cohort_definition cd
+       LEFT JOIN cohort_membership cm ON cm.cohort_id = cd.cohort_id
+       GROUP BY cd.cohort_id
+       ORDER BY cd.cohort_id`,
+    )
+    .all() as Array<{ cohort_id: string; count: number | bigint }>;
+  return Object.fromEntries(
+    rows.map((row) => [row.cohort_id, Number(row.count)]),
+  );
+}
+
 const args = process.argv.slice(2);
 const catalogPath = readOption(args, "catalog") ?? "data/catalog/seed-catalog.json";
 const dbPath = readOption(args, "db") ?? "data/fc-market-lab.db";
@@ -35,6 +52,7 @@ try {
         db_path: dbPath,
         catalog_path: catalogPath,
         ...result,
+        cohort_memberships_by_cohort: countCohortMembershipsById(db),
         totals: countMarketStructureDatabase(db),
       },
       null,
