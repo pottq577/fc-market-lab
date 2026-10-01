@@ -6,15 +6,26 @@ interface MetricThreshold {
   min_coverage_ratio: number;
 }
 
+interface RegimeParameter {
+  regime_id: string;
+  event_id: string;
+  class_filter: string[];
+  grade_min: number | null;
+  grade_max: number | null;
+}
+
 interface MarketMetricParameters {
   timezone: string;
   price_semantics: string;
+  allow_regime_crossing: boolean;
+  regimes: RegimeParameter[];
   sample_market: MetricThreshold;
   cross_player_cohort: MetricThreshold;
 }
 
 interface DailyPrice {
   date: string;
+  source_timestamp: string;
   value: number | null;
   valid: boolean;
   reason: string | null;
@@ -100,6 +111,63 @@ function threshold(value: unknown, context: string): MetricThreshold {
   return { min_valid_count, min_coverage_ratio };
 }
 
+function nullableGrade(value: unknown, field: string): number | null {
+  if (value === null || value === undefined) return null;
+  if (!Number.isInteger(value) || Number(value) < 1 || Number(value) > 13) {
+    throw new TypeError(`${field} must be null or an integer between 1 and 13`);
+  }
+  return Number(value);
+}
+
+function parseRegimes(value: unknown): RegimeParameter[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    throw new TypeError("analysis parameters.regimes must be an array");
+  }
+  return value.map((item, index) => {
+    if (typeof item !== "object" || item === null || Array.isArray(item)) {
+      throw new TypeError(`analysis parameters.regimes[${index}] must be an object`);
+    }
+    const record = item as Record<string, unknown>;
+    const readString = (key: string): string => {
+      const field = record[key];
+      if (typeof field !== "string" || field.trim() === "") {
+        throw new TypeError(`analysis parameters.regimes[${index}].${key} must be a non-empty string`);
+      }
+      return field.trim();
+    };
+    if (!Array.isArray(record.class_filter)) {
+      throw new TypeError(`analysis parameters.regimes[${index}].class_filter must be an array`);
+    }
+    const classFilter = record.class_filter.map((itemValue, itemIndex) => {
+      if (typeof itemValue !== "string" || itemValue.trim() === "") {
+        throw new TypeError(
+          `analysis parameters.regimes[${index}].class_filter[${itemIndex}] must be a non-empty string`,
+        );
+      }
+      return itemValue.trim();
+    });
+    const gradeMin = nullableGrade(
+      record.grade_min,
+      `analysis parameters.regimes[${index}].grade_min`,
+    );
+    const gradeMax = nullableGrade(
+      record.grade_max,
+      `analysis parameters.regimes[${index}].grade_max`,
+    );
+    if (gradeMin !== null && gradeMax !== null && gradeMin > gradeMax) {
+      throw new TypeError(`analysis parameters.regimes[${index}].grade_min must not exceed grade_max`);
+    }
+    return {
+      regime_id: readString("regime_id"),
+      event_id: readString("event_id"),
+      class_filter: classFilter,
+      grade_min: gradeMin,
+      grade_max: gradeMax,
+    };
+  });
+}
+
 export function parseMarketMetricParameters(value: unknown): MarketMetricParameters {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new TypeError("analysis parameters must be an object");
@@ -111,9 +179,14 @@ export function parseMarketMetricParameters(value: unknown): MarketMetricParamet
   if (typeof record.price_semantics !== "string" || record.price_semantics.trim() === "") {
     throw new TypeError("analysis parameters.price_semantics must be a non-empty string");
   }
+  if (record.allow_regime_crossing !== undefined && typeof record.allow_regime_crossing !== "boolean") {
+    throw new TypeError("analysis parameters.allow_regime_crossing must be a boolean");
+  }
   return {
     timezone: record.timezone,
     price_semantics: record.price_semantics,
+    allow_regime_crossing: record.allow_regime_crossing === true,
+    regimes: parseRegimes(record.regimes),
     sample_market: threshold(record.sample_market, "analysis parameters.sample_market"),
     cross_player_cohort: threshold(
       record.cross_player_cohort,
@@ -179,7 +252,16 @@ function round(value: number): number {
   return Number(value.toFixed(12));
 }
 
-function buildReturns(series: DailyPrice[]): ReturnPoint[] {
+interface RegimeBoundary {
+  regime_id: string;
+  boundary_at: string;
+  boundary_type: "ENTER" | "EXIT";
+}
+
+function buildReturns(
+  series: DailyPrice[],
+  regimeBoundaries: RegimeBoundary[] = [],
+): ReturnPoint[] {
   const byDate = new Map(series.map((point) => [point.date, point]));
   return series.map((point) => {
     const previous = byDate.get(previousDate(point.date));
@@ -191,6 +273,19 @@ function buildReturns(series: DailyPrice[]): ReturnPoint[] {
     }
     if (!point.valid) {
       return { date: point.date, value: null, status: "NO_RESULT", reason: point.reason ?? "INVALID_CURRENT_DAY" };
+    }
+    const crossedBoundary = regimeBoundaries.find(
+      (boundary) =>
+        previous.source_timestamp < boundary.boundary_at &&
+        boundary.boundary_at <= point.source_timestamp,
+    );
+    if (crossedBoundary) {
+      return {
+        date: point.date,
+        value: null,
+        status: "NO_RESULT",
+        reason: `REGIME_BOUNDARY:${crossedBoundary.regime_id}:${crossedBoundary.boundary_type}`,
+      };
     }
     return {
       date: point.date,
@@ -252,10 +347,88 @@ function loadDailyPrices(
           ? "INVALID_PRICE"
           : null;
     const points = result.get(row.instrument_id) ?? [];
-    points.push({ date, value: numeric, valid, reason });
+    points.push({
+      date,
+      source_timestamp: row.source_timestamp,
+      value: numeric,
+      valid,
+      reason,
+    });
     result.set(row.instrument_id, points);
   }
   for (const points of result.values()) points.sort((left, right) => left.date.localeCompare(right.date));
+  return result;
+}
+
+function loadRegimeBoundaries(
+  db: DatabaseSync,
+  datasetSnapshotId: string,
+  parameters: MarketMetricParameters,
+): Map<string, RegimeBoundary[]> {
+  const result = new Map<string, RegimeBoundary[]>();
+  if (parameters.allow_regime_crossing || parameters.regimes.length === 0) return result;
+
+  const eventRows = db.prepare(
+    `SELECT e.event_id, e.event_type, e.effective_at, e.ended_at
+     FROM dataset_snapshot_event dse
+     JOIN event e ON e.event_id = dse.event_id
+     WHERE dse.dataset_snapshot_id = ?`,
+  ).all(datasetSnapshotId) as Array<{
+    event_id: string;
+    event_type: string;
+    effective_at: string | null;
+    ended_at: string | null;
+  }>;
+  const eventById = new Map(eventRows.map((row) => [row.event_id, row]));
+
+  const instruments = db.prepare(
+    `SELECT DISTINCT dspp.instrument_id, i.grade, pc.season
+     FROM dataset_snapshot_price_point dspp
+     JOIN instrument i ON i.instrument_id = dspp.instrument_id
+     JOIN player_card pc ON pc.spid = i.spid
+     WHERE dspp.dataset_snapshot_id = ?`,
+  ).all(datasetSnapshotId) as Array<{
+    instrument_id: string;
+    grade: number | bigint;
+    season: string;
+  }>;
+
+  for (const regime of parameters.regimes) {
+    const event = eventById.get(regime.event_id);
+    if (!event) {
+      throw new TypeError(`regime ${regime.regime_id} references event outside the dataset snapshot`);
+    }
+    if (event.event_type !== "MARKET_RULE_CHANGE" || !event.effective_at) {
+      throw new TypeError(`regime ${regime.regime_id} must reference an effective MARKET_RULE_CHANGE event`);
+    }
+    for (const instrument of instruments) {
+      const grade = Number(instrument.grade);
+      const classMatches =
+        regime.class_filter.length === 0 || regime.class_filter.includes(instrument.season);
+      const gradeMatches =
+        (regime.grade_min === null || grade >= regime.grade_min) &&
+        (regime.grade_max === null || grade <= regime.grade_max);
+      if (!classMatches || !gradeMatches) continue;
+      const boundaries = result.get(instrument.instrument_id) ?? [];
+      boundaries.push({
+        regime_id: regime.regime_id,
+        boundary_at: event.effective_at,
+        boundary_type: "ENTER",
+      });
+      if (event.ended_at) {
+        boundaries.push({
+          regime_id: regime.regime_id,
+          boundary_at: event.ended_at,
+          boundary_type: "EXIT",
+        });
+      }
+      result.set(instrument.instrument_id, boundaries);
+    }
+  }
+
+  for (const boundaries of result.values()) {
+    boundaries.sort((left, right) => left.boundary_at.localeCompare(right.boundary_at));
+  }
   return result;
 }
 
@@ -376,20 +549,24 @@ export function runMarketMetrics(
     schema_version: number;
   } | undefined;
   if (!run) throw new TypeError(`analysis run ${analysisRunId} does not exist`);
-  if (run.schema_version < 7) {
+  if (run.schema_version < 8) {
     throw new TypeError(
-      "analysis run uses a pre-replay dataset snapshot; run prepare:analysis again",
+      "analysis run uses a pre-shock/regime dataset snapshot; run prepare:analysis again",
     );
   }
   const parameters = parseMarketMetricParameters(JSON.parse(run.parameters_json) as unknown);
   const dailyPrices = loadDailyPrices(db, run.dataset_snapshot_id, parameters);
+  const regimeBoundaries = loadRegimeBoundaries(db, run.dataset_snapshot_id, parameters);
   const instrumentIds = [...dailyPrices.keys()].sort();
   const playerByInstrument = loadInstrumentPlayers(db, instrumentIds);
   const instrumentReturns = new Map<string, ReturnPoint[]>();
   const rows: MetricRow[] = [];
 
   for (const instrumentId of instrumentIds) {
-    const returns = buildReturns(dailyPrices.get(instrumentId)!);
+    const returns = buildReturns(
+      dailyPrices.get(instrumentId)!,
+      regimeBoundaries.get(instrumentId) ?? [],
+    );
     instrumentReturns.set(instrumentId, returns);
     for (const point of returns) {
       rows.push(metricRow({

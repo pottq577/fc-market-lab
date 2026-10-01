@@ -3,6 +3,20 @@
   "timezone": "Asia/Seoul",
   "price_semantics": "MARKET_REFERENCE_PRICE",
   "allow_regime_crossing": false,
+  "regimes": [
+    {
+      "regime_id": "26tots-11-reference-price-2026-09-10",
+      "event_id": "market-rule-26tots-11-2026-09-10",
+      "class_filter": ["26TOTS"],
+      "grade_min": 11,
+      "grade_max": 11
+    }
+  ],
+  "shock_detection": {
+    "baseline_window": 30,
+    "min_baseline_count": 20,
+    "robust_z_threshold": 3.5
+  },
   "sample_market": {
     "min_valid_count": 10,
     "min_coverage_ratio": 0.6

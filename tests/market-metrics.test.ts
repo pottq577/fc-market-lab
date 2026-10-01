@@ -24,8 +24,16 @@ function dbFixture(): DatabaseSync {
       status TEXT NOT NULL,
       result_hash TEXT
     ) STRICT;
-    CREATE TABLE instrument (instrument_id TEXT PRIMARY KEY, spid TEXT NOT NULL) STRICT;
-    CREATE TABLE player_card (spid TEXT PRIMARY KEY, player_id TEXT NOT NULL) STRICT;
+    CREATE TABLE instrument (
+      instrument_id TEXT PRIMARY KEY,
+      spid TEXT NOT NULL,
+      grade INTEGER NOT NULL
+    ) STRICT;
+    CREATE TABLE player_card (
+      spid TEXT PRIMARY KEY,
+      player_id TEXT NOT NULL,
+      season TEXT NOT NULL
+    ) STRICT;
     CREATE TABLE price_point (
       source_snapshot_id TEXT NOT NULL,
       instrument_id TEXT NOT NULL,
@@ -71,6 +79,17 @@ function dbFixture(): DatabaseSync {
       rule_params_json TEXT NOT NULL,
       PRIMARY KEY (dataset_snapshot_id, cohort_id)
     ) STRICT;
+    CREATE TABLE event (
+      event_id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      effective_at TEXT,
+      ended_at TEXT
+    ) STRICT;
+    CREATE TABLE dataset_snapshot_event (
+      dataset_snapshot_id TEXT NOT NULL,
+      event_id TEXT NOT NULL,
+      PRIMARY KEY (dataset_snapshot_id, event_id)
+    ) STRICT;
     CREATE TABLE analysis_metric (
       analysis_run_id TEXT NOT NULL,
       metric_date TEXT NOT NULL,
@@ -86,7 +105,7 @@ function dbFixture(): DatabaseSync {
       PRIMARY KEY (analysis_run_id, metric_date, scope_type, scope_id, metric_name)
     ) STRICT;
   `);
-  db.prepare("INSERT INTO dataset_snapshot VALUES ('ds', '2026-10-03T00:00:00.000Z', 7)").run();
+  db.prepare("INSERT INTO dataset_snapshot VALUES ('ds', '2026-10-03T00:00:00.000Z', 8)").run();
   db.prepare(
     `INSERT INTO analysis_run VALUES (
       'run', 'ds', ?, 'READY', NULL
@@ -95,17 +114,19 @@ function dbFixture(): DatabaseSync {
     timezone: "Asia/Seoul",
     price_semantics: "MARKET_REFERENCE_PRICE",
     sample_market: { min_valid_count: 2, min_coverage_ratio: 0.6 },
+    allow_regime_crossing: false,
+    regimes: [],
     cross_player_cohort: { min_valid_count: 2, min_coverage_ratio: 0.6 },
   }));
 
   const cards = [
-    ["100:1", "100", "p1"],
-    ["200:1", "200", "p2"],
-    ["300:1", "300", "p3"],
+    ["100:1", "100", "p1", 11, "26TOTS"],
+    ["200:1", "200", "p2", 1, "PTG"],
+    ["300:1", "300", "p3", 1, "PTG"],
   ] as const;
-  for (const [instrument, spid, player] of cards) {
-    db.prepare("INSERT INTO instrument VALUES (?, ?)").run(instrument, spid);
-    db.prepare("INSERT INTO player_card VALUES (?, ?)").run(spid, player);
+  for (const [instrument, spid, player, grade, season] of cards) {
+    db.prepare("INSERT INTO instrument VALUES (?, ?, ?)").run(instrument, spid, grade);
+    db.prepare("INSERT INTO player_card VALUES (?, ?, ?)").run(spid, player, season);
   }
   const prices = [
     ["100:1", 100, 110],
@@ -159,6 +180,8 @@ test("calculates robust helper statistics", () => {
     timezone: "Asia/Seoul",
     price_semantics: "MARKET_REFERENCE_PRICE",
     sample_market: { min_valid_count: 10, min_coverage_ratio: 0.6 },
+    allow_regime_crossing: false,
+    regimes: [],
     cross_player_cohort: { min_valid_count: 3, min_coverage_ratio: 0.6 },
   }).sample_market, { min_valid_count: 10, min_coverage_ratio: 0.6 });
 });
@@ -219,6 +242,61 @@ test("computes snapshot-bound market metrics and emits NO_RESULT for empty cohor
     };
     assert.equal(run.status, "SUCCEEDED");
     assert.equal(run.result_hash, first.result_hash);
+  } finally {
+    db.close();
+  }
+});
+
+test("blocks only instruments whose configured Regime boundary is crossed", () => {
+  const db = dbFixture();
+  try {
+    db.prepare(
+      "INSERT INTO event VALUES ('rule', 'MARKET_RULE_CHANGE', '2026-10-01T12:00:00.000Z', NULL)",
+    ).run();
+    db.prepare("INSERT INTO dataset_snapshot_event VALUES ('ds', 'rule')").run();
+    db.prepare(
+      "UPDATE analysis_run SET parameters_json = ? WHERE analysis_run_id = 'run'",
+    ).run(JSON.stringify({
+      timezone: "Asia/Seoul",
+      price_semantics: "MARKET_REFERENCE_PRICE",
+      allow_regime_crossing: false,
+      regimes: [{
+        regime_id: "26tots-11-test",
+        event_id: "rule",
+        class_filter: ["26TOTS"],
+        grade_min: 11,
+        grade_max: 11,
+      }],
+      sample_market: { min_valid_count: 2, min_coverage_ratio: 0.6 },
+      cross_player_cohort: { min_valid_count: 2, min_coverage_ratio: 0.6 },
+    }));
+
+    runMarketMetrics(db, "run");
+    const blocked = db.prepare(
+      `SELECT status, details_json
+       FROM analysis_metric
+       WHERE analysis_run_id = 'run'
+         AND metric_date = '2026-10-02'
+         AND scope_type = 'INSTRUMENT'
+         AND scope_id = '100:1'
+         AND metric_name = 'RETURN_1D'`,
+    ).get() as { status: string; details_json: string };
+    assert.equal(blocked.status, "NO_RESULT");
+    assert.match(
+      JSON.parse(blocked.details_json).reason as string,
+      /^REGIME_BOUNDARY:26tots-11-test:ENTER$/,
+    );
+
+    const unaffected = db.prepare(
+      `SELECT status
+       FROM analysis_metric
+       WHERE analysis_run_id = 'run'
+         AND metric_date = '2026-10-02'
+         AND scope_type = 'INSTRUMENT'
+         AND scope_id = '200:1'
+         AND metric_name = 'RETURN_1D'`,
+    ).get() as { status: string };
+    assert.equal(unaffected.status, "OK");
   } finally {
     db.close();
   }

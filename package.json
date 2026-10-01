@@ -24,6 +24,7 @@
     "prepare:analysis": "node --experimental-strip-types src/cli/prepare-analysis-run.ts",
     "run:metrics": "node --experimental-strip-types src/cli/run-market-metrics.ts",
     "run:replay": "node --experimental-strip-types src/cli/run-event-replay.ts",
+    "run:shock": "node --experimental-strip-types src/cli/run-shock-detection.ts",
     "catalog:check": "node --experimental-strip-types src/cli/seed-catalog.ts data/catalog/seed-catalog.json",
     "catalog:targets": "node --experimental-strip-types src/cli/seed-catalog.ts data/catalog/seed-catalog.json --targets",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
