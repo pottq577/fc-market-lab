@@ -155,17 +155,21 @@ export function parseResolvedAcceptanceTargetDocument(
 
 function seasonCode(value: unknown): string | null {
   if (typeof value !== "string") return null;
-  const code = value.trim().split(/\s*\(/, 1)[0]?.trim();
+  const code = value
+    .trim()
+    .split(/\s*\(/, 1)[0]
+    ?.replace(/\s+/g, "")
+    .toUpperCase();
   return code && code !== "" ? code : null;
 }
 
 function seasonId(value: unknown, season: string): number {
   if (!Array.isArray(value)) throw new TypeError("season metadata must be an array");
-  const expected = season.trim().toUpperCase();
+  const expected = seasonCode(season);
   const matches = value.flatMap((item) => {
     const row = record(item, "season metadata entry");
     const id = Number(row.seasonId);
-    const code = seasonCode(row.className)?.toUpperCase();
+    const code = seasonCode(row.className);
     return Number.isInteger(id) && code === expected ? [id] : [];
   });
   if (matches.length !== 1) {

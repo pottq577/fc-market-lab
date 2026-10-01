@@ -22,11 +22,11 @@ const document = parseAcceptanceTargetDocument({
   }],
 });
 
-test("resolves acceptance targets from decorated season class names and exact player metadata", async () => {
+test("resolves acceptance targets from spaced decorated season class names", async () => {
   const resolved = await resolveAcceptanceTargets(document, {
     resolvedAt: "2026-10-01T05:00:00.000Z",
     fetchJson: async (url) => url.includes("seasonid")
-      ? [{ seasonId: 900, className: "26TOTS (26 Team Of The Season)" }]
+      ? [{ seasonId: 900, className: "26 TOTS (26 Team Of The Season)" }]
       : [
           { id: 900111111, name: "다른 선수" },
           { id: 900222222, name: "마르크 쿠쿠레야" },
