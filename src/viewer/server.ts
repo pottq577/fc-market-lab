@@ -2,7 +2,8 @@ import { createServer, type Server } from "node:http";
 import { DatabaseSync } from "node:sqlite";
 
 import { listViewerRuns, loadViewerPayload } from "./data.ts";
-import { viewerPage } from "./page.ts";
+import { insightViewerPage } from "./insight-page.ts";
+import { viewerPage as legacyViewerPage } from "./page.ts";
 
 export interface ViewerServerOptions {
   dbPath: string;
@@ -32,7 +33,7 @@ export function createViewerServer(options: ViewerServerOptions): {
           "content-type": "text/html; charset=utf-8",
           "cache-control": "no-store",
         });
-        response.end(viewerPage());
+        response.end(url.searchParams.get("legacy") === "1" ? legacyViewerPage() : insightViewerPage());
         return;
       }
       if (url.pathname === "/api/runs") {
