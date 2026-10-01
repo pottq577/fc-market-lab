@@ -115,20 +115,20 @@ Timeline은 확인 가능한 source를 기준으로 세분화한다:
 PoC는 다음 acceptance criteria를 모두 충족하면 1차 완료로 본다.
 완료 조건은 다음과 같다:
 
-- Gate 0A evidence에 source, policy URL, 검토 시각, access method, price semantics, automation decision이 기록돼 있다
-- seed player가 20–30명이며 각 player에 primary instrument와 선정 근거가 있다
-- primary instrument가 source-native expected observation 기준 90% 이상 coverage를 가진다. 출시 후 180일 이상 지난 instrument는 최소 180일 history를 요구하고, 더 새로운 instrument는 공식 출시일부터 최신 observation까지의 full-lifetime coverage를 요구한다. 365개 observation은 목표값으로 별도 표시한다
-- 가격과 metadata가 `spid`와 instrument identity를 통해 연결되고 source snapshot까지 역추적된다
-- 사용 데이터가 확보 가능한 경우 최소 5명 seed player와 10개 card 또는 instrument에 usage observation이 연결된다. Source가 grade를 제공하지 않으면 card 단위로 저장한다. 과거 usage를 제공하지 않으면 `UNAVAILABLE_SOURCE` evidence로 대체한다
-- 동일 선수 relation, 팀컬러 대체 relation, cohort membership이 시간 유효성과 함께 조회된다
-- `SAMPLE_MARKET`, `CORE`, `PACK_EXPOSED`, `PREMIUM_SCARCE`에 대해 데이터 충분성 기준을 적용한 index와 relative strength를 계산할 수 있다
-- 라커룸 토크 11화 replay가 `announced_at` 기준 window와 비교군 결과를 생성한다
-- SSS 사건 replay가 direct exposure, comparison cohort, Shock candidate, 후속 event를 한 timeline에서 재생한다
-- 기준가 규칙 변경 Regime을 등록하고 기본 return 계산이 경계를 넘지 않는 것을 검증한다
-- Derived 결과에서 `analysis_run -> dataset_snapshot -> source_snapshot` 경로로 원본까지 추적된다
-- metric sufficiency 기준 미달 fixture에서 0 대신 `NO_RESULT`를 반환한다
-- replay test가 cutoff 이후 usage, relation snapshot, cohort membership을 참조하지 않는 것을 검증한다
-- 핵심 분석이 Python과 생성형 인공지능 호출 없이 재현되고 결과가 사실, 계산, 해석, 가설로 구분된다
+- `AC-001` — Gate 0A evidence에 source, policy URL, 검토 시각, access method, price semantics, automation decision이 기록돼 있다
+- `AC-002` — seed player가 20–30명이며 각 player에 primary instrument와 선정 근거가 있다
+- `AC-003` — primary instrument가 source-native expected observation 기준 90% 이상 coverage를 가진다. 출시 후 180일 이상 지난 instrument는 최소 180일 history를 요구하고, 더 새로운 instrument는 공식 출시일부터 최신 observation까지의 full-lifetime coverage를 요구한다. 365개 observation은 목표값으로 별도 표시한다
+- `AC-004` — 가격과 metadata가 `spid`와 instrument identity를 통해 연결되고 source snapshot까지 역추적된다
+- `AC-005` — 사용 데이터가 확보 가능한 경우 최소 5명 seed player와 10개 card 또는 instrument에 usage observation이 연결된다. Source가 grade를 제공하지 않으면 card 단위로 저장한다. 과거 usage를 제공하지 않으면 `UNAVAILABLE_SOURCE` evidence로 대체한다
+- `AC-006` — 동일 선수 relation, 팀컬러 대체 relation, cohort membership이 시간 유효성과 함께 조회된다
+- `AC-007` — `SAMPLE_MARKET`, `CORE`, `PACK_EXPOSED`, `PREMIUM_SCARCE`에 대해 데이터 충분성 기준을 적용한 index와 relative strength를 계산할 수 있다
+- `AC-008` — 라커룸 토크 11화 replay가 `announced_at` 기준 window와 비교군 결과를 생성한다
+- `AC-009` — SSS 사건 replay가 direct exposure, comparison cohort, Shock candidate, 후속 event를 한 timeline에서 재생한다
+- `AC-010` — 기준가 규칙 변경 Regime을 등록하고 기본 return 계산이 경계를 넘지 않는 것을 검증한다
+- `AC-011` — Derived 결과에서 `analysis_run -> dataset_snapshot -> source_snapshot` 경로로 원본까지 추적된다
+- `AC-012` — metric sufficiency 기준 미달 fixture에서 0 대신 `NO_RESULT`를 반환한다
+- `AC-013` — replay test가 cutoff 이후 usage, relation snapshot, cohort membership을 참조하지 않는 것을 검증한다
+- `AC-014` — 핵심 분석이 Python과 생성형 인공지능 호출 없이 재현되고 결과가 사실, 계산, 해석, 가설로 구분된다
 
 ## 완료 판정에서 제외하는 항목
 
