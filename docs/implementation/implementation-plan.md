@@ -22,6 +22,14 @@ Canonical acceptance run은 `run_97896c0081872d383f941bdab180c3aecc334e377b67522
 npm run poc:verify
 ```
 
+완료된 analysis run을 사람이 확인할 때는 read-only 로컬 Viewer를 사용한다:
+
+```bash
+npm run viewer
+```
+
+기본 주소는 `http://127.0.0.1:8790`이다. Viewer는 `data/fc-market-lab.db`를 수정하지 않고 최신 성공 run을 기본으로 표시하며, 과거 run도 선택할 수 있다.
+
 ## 1. Gate 0A에서 source viability를 확인한다
 
 소수 instrument로 가격 history의 접근 방식과 이용 조건을 먼저 확인한다:
