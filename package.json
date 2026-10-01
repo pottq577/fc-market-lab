@@ -21,6 +21,7 @@
     "annotations:check": "node --experimental-strip-types src/cli/ingest-market-annotations.ts --check",
     "ingest:annotations": "node --experimental-strip-types src/cli/ingest-market-annotations.ts",
     "build:structure": "node --experimental-strip-types src/cli/build-market-structure.ts",
+    "prepare:analysis": "node --experimental-strip-types src/cli/prepare-analysis-run.ts",
     "catalog:check": "node --experimental-strip-types src/cli/seed-catalog.ts data/catalog/seed-catalog.json",
     "catalog:targets": "node --experimental-strip-types src/cli/seed-catalog.ts data/catalog/seed-catalog.json --targets",
     "test": "node --experimental-strip-types --test tests/*.test.ts",

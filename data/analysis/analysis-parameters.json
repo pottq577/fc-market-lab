@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "timezone": "Asia/Seoul",
+  "price_semantics": "MARKET_REFERENCE_PRICE",
+  "allow_regime_crossing": false,
+  "sample_market": {
+    "min_valid_count": 10,
+    "min_coverage_ratio": 0.6
+  },
+  "cross_player_cohort": {
+    "min_valid_count": 3,
+    "min_coverage_ratio": 0.6
+  }
+}
