@@ -23,9 +23,21 @@ const catalog: StructureSeedCatalog = {
   catalog_id: "test-sample",
   frozen_at: "2026-09-29T00:00:00.000Z",
   seeds: [
-    { player_key: "p1", primary_instrument: { spid: "100", grade: 1 } },
-    { player_key: "p2", primary_instrument: { spid: "200", grade: 1 } },
-    { player_key: "p3", primary_instrument: { spid: "300", grade: 1 } },
+    {
+      player_key: "p1",
+      primary_instrument: { spid: "100", grade: 1 },
+      selection_observation: { ranker_squad_count: 100, displayed_share_percent: 20 },
+    },
+    {
+      player_key: "p2",
+      primary_instrument: { spid: "200", grade: 1 },
+      selection_observation: { ranker_squad_count: 90, displayed_share_percent: 10 },
+    },
+    {
+      player_key: "p3",
+      primary_instrument: { spid: "300", grade: 1 },
+      selection_observation: { ranker_squad_count: 80, displayed_share_percent: 5 },
+    },
   ],
 };
 
@@ -204,8 +216,8 @@ test("builds time-aware substitute relations and frozen cohort membership idempo
       as_of: "2026-10-01T00:00:00.000Z",
       relations_created: 2,
       relation_snapshots_created: 2,
-      cohort_definitions_created: 2,
-      cohort_memberships_created: 4,
+      cohort_definitions_created: 5,
+      cohort_memberships_created: 10,
     });
     assert.deepEqual(second, {
       as_of: "2026-10-01T00:00:00.000Z",
@@ -289,8 +301,8 @@ test("builds time-aware substitute relations and frozen cohort membership idempo
     assert.deepEqual(countMarketStructureDatabase(db), {
       card_relations: 2,
       relation_snapshots: 2,
-      cohort_definitions: 2,
-      cohort_memberships: 4,
+      cohort_definitions: 5,
+      cohort_memberships: 10,
     });
   } finally {
     db.close();

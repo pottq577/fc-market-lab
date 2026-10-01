@@ -10,6 +10,10 @@ export interface StructureSeedCatalog {
       spid: string;
       grade: number;
     };
+    selection_observation: {
+      ranker_squad_count: number;
+      displayed_share_percent: number;
+    };
   }>;
 }
 
@@ -38,6 +42,11 @@ export interface BuildMarketStructureResult {
 
 const RELATION_DEFINITION_VERSION = "full-metadata-v1";
 const SAMPLE_MARKET_RULE_VERSION = "frozen-seed-v1";
+const CORE_RULE_VERSION = "frozen-seed-ranker-count-v1";
+const CORE_TOP_N = 10;
+const META_RULE_VERSION = "latest-player-card-usage-share-v1";
+const META_MIN_USAGE_SHARE = 0.05;
+const INDIRECT_EXPOSED_RULE_VERSION = "relation-to-direct-exposure-v1";
 
 function deterministicId(prefix: string, ...parts: string[]): string {
   return `${prefix}_${createHash("sha256").update(parts.join("\0")).digest("hex")}`;
@@ -144,10 +153,20 @@ function latestPrice(db: DatabaseSync, instrumentId: string, asOf: string): numb
   return row ? Number(row.value) : null;
 }
 
-function latestUsageShare(db: DatabaseSync, spid: string, asOf: string): number | null {
+interface UsageObservation {
+  usage_point_id: string;
+  as_of: string;
+  usage_share: number;
+}
+
+function latestUsageObservation(
+  db: DatabaseSync,
+  spid: string,
+  asOf: string,
+): UsageObservation | null {
   const row = db
     .prepare(
-      `SELECT usage_share
+      `SELECT usage_point_id, as_of, usage_share
        FROM usage_point
        WHERE subject_type = 'PLAYER_CARD'
          AND spid = ?
@@ -156,8 +175,12 @@ function latestUsageShare(db: DatabaseSync, spid: string, asOf: string): number 
        ORDER BY as_of DESC, usage_point_id DESC
        LIMIT 1`,
     )
-    .get(spid, asOf) as { usage_share: number } | undefined;
-  return row?.usage_share ?? null;
+    .get(spid, asOf) as UsageObservation | undefined;
+  return row ?? null;
+}
+
+function latestUsageShare(db: DatabaseSync, spid: string, asOf: string): number | null {
+  return latestUsageObservation(db, spid, asOf)?.usage_share ?? null;
 }
 
 function resolveAsOf(
@@ -359,6 +382,152 @@ function insertCohortDefinition(
   return Number(inserted.changes) === 1;
 }
 
+function syncMetaMembership(
+  db: DatabaseSync,
+  input: {
+    cohortId: string;
+    state: CardState;
+    asOf: string;
+    minimumUsageShare: number;
+  },
+): number {
+  const observation = latestUsageObservation(db, input.state.spid, input.asOf);
+  const open = db
+    .prepare(
+      `SELECT valid_from
+       FROM cohort_membership
+       WHERE cohort_id = ? AND instrument_id = ? AND valid_to IS NULL
+       ORDER BY valid_from DESC
+       LIMIT 1`,
+    )
+    .get(input.cohortId, input.state.instrument_id) as
+    | { valid_from: string }
+    | undefined;
+
+  const qualifies =
+    observation !== null && observation.usage_share >= input.minimumUsageShare;
+  if (qualifies) {
+    if (open) {
+      return 0;
+    }
+    const inserted = db
+      .prepare(
+        `INSERT OR IGNORE INTO cohort_membership(
+          cohort_id, instrument_id, valid_from, valid_to,
+          membership_source, confidence
+        ) VALUES (?, ?, ?, NULL, ?, 1)`,
+      )
+      .run(
+        input.cohortId,
+        input.state.instrument_id,
+        observation.as_of,
+        `USAGE_POINT:${observation.usage_point_id}`,
+      );
+    return Number(inserted.changes);
+  }
+
+  if (open && observation && open.valid_from < observation.as_of) {
+    db.prepare(
+      `UPDATE cohort_membership
+       SET valid_to = ?
+       WHERE cohort_id = ? AND instrument_id = ? AND valid_from = ?
+         AND valid_to IS NULL`,
+    ).run(
+      observation.as_of,
+      input.cohortId,
+      input.state.instrument_id,
+      open.valid_from,
+    );
+  }
+  return 0;
+}
+
+function laterTimestamp(left: string, right: string): string {
+  return left >= right ? left : right;
+}
+
+function hasOverlappingDirectExposure(
+  db: DatabaseSync,
+  instrumentId: string,
+  validFrom: string,
+  validTo: string | null,
+): boolean {
+  const row = db
+    .prepare(
+      `SELECT 1 AS found
+       FROM exposure
+       WHERE exposure_type = 'DIRECT'
+         AND instrument_id = ?
+         AND valid_from < COALESCE(?, '9999-12-31T23:59:59.999Z')
+         AND (valid_to IS NULL OR ? < valid_to)
+       LIMIT 1`,
+    )
+    .get(instrumentId, validTo, validFrom);
+  return Boolean(row);
+}
+
+function insertIndirectExposureMemberships(
+  db: DatabaseSync,
+  asOf: string,
+  exposures: Array<{
+    exposure_id: string;
+    instrument_id: string;
+    valid_from: string;
+    valid_to: string | null;
+    confidence: number;
+  }>,
+): number {
+  let created = 0;
+  const related = db.prepare(
+    `SELECT relation_id, source_instrument, target_instrument, valid_from, valid_to
+     FROM card_relation
+     WHERE (source_instrument = ? OR target_instrument = ?)
+       AND valid_from <= ?
+     ORDER BY relation_id`,
+  );
+  const insert = db.prepare(
+    `INSERT OR IGNORE INTO cohort_membership(
+      cohort_id, instrument_id, valid_from, valid_to, membership_source, confidence
+    ) VALUES ('INDIRECT_EXPOSED', ?, ?, ?, ?, ?)`,
+  );
+
+  for (const exposure of exposures) {
+    const relations = related.all(
+      exposure.instrument_id,
+      exposure.instrument_id,
+      asOf,
+    ) as Array<{
+      relation_id: string;
+      source_instrument: string;
+      target_instrument: string;
+      valid_from: string;
+      valid_to: string | null;
+    }>;
+    for (const relation of relations) {
+      const candidate = relation.source_instrument === exposure.instrument_id
+        ? relation.target_instrument
+        : relation.source_instrument;
+      const validFrom = laterTimestamp(exposure.valid_from, relation.valid_from);
+      const validTo = earliestNullable([exposure.valid_to, relation.valid_to]);
+      if (validTo !== null && validFrom >= validTo) {
+        continue;
+      }
+      if (hasOverlappingDirectExposure(db, candidate, validFrom, validTo)) {
+        continue;
+      }
+      const result = insert.run(
+        candidate,
+        validFrom,
+        validTo,
+        `RELATION_EXPOSURE:${exposure.exposure_id}:${relation.relation_id}`,
+        exposure.confidence,
+      );
+      created += Number(result.changes);
+    }
+  }
+  return created;
+}
+
 export function buildMarketStructure(
   db: DatabaseSync,
   catalog: StructureSeedCatalog,
@@ -409,6 +578,92 @@ export function buildMarketStructure(
       aggregationLevel: "PLAYER",
       ruleVersion: "direct-exposure-v1",
       ruleParamsJson: JSON.stringify({ exposure_type: "DIRECT" }),
+    }) ? 1 : 0;
+
+    const requestedCoreTopN = Math.min(CORE_TOP_N, catalog.seeds.length);
+    const rankedCoreSeeds = [...catalog.seeds].sort((left, right) =>
+      right.selection_observation.ranker_squad_count -
+        left.selection_observation.ranker_squad_count ||
+      left.player_key.localeCompare(right.player_key),
+    );
+    const coreCutoff =
+      rankedCoreSeeds[requestedCoreTopN - 1]!.selection_observation.ranker_squad_count;
+    const coreSeeds = rankedCoreSeeds.filter(
+      (seed) => seed.selection_observation.ranker_squad_count >= coreCutoff,
+    );
+    const coreCohortId =
+      `CORE:${catalog.catalog_id}:top-${requestedCoreTopN}-with-ties`;
+    cohortDefinitionsCreated += insertCohortDefinition(db, {
+      cohortId: coreCohortId,
+      name: "CORE",
+      aggregationLevel: "PLAYER",
+      ruleVersion: CORE_RULE_VERSION,
+      ruleParamsJson: JSON.stringify({
+        catalog_id: catalog.catalog_id,
+        top_n: requestedCoreTopN,
+        include_cutoff_ties: true,
+        cutoff_ranker_squad_count: coreCutoff,
+        selected_count: coreSeeds.length,
+        ranking_field: "selection_observation.ranker_squad_count",
+        frozen_at: timestamp(catalog.frozen_at, "catalog.frozen_at"),
+      }),
+    }) ? 1 : 0;
+    const primaryByPlayer = new Map(
+      primaryStates.map((state) => [state.player_id, state]),
+    );
+    for (const seed of coreSeeds) {
+      const state = primaryByPlayer.get(seed.player_key)!;
+      const membership = db
+        .prepare(
+          `INSERT OR IGNORE INTO cohort_membership(
+            cohort_id, instrument_id, valid_from, valid_to,
+            membership_source, confidence
+          ) VALUES (?, ?, ?, NULL, ?, 1)`,
+        )
+        .run(
+          coreCohortId,
+          state.instrument_id,
+          timestamp(catalog.frozen_at, "catalog.frozen_at"),
+          `FROZEN_USAGE_COUNT:${seed.selection_observation.ranker_squad_count}`,
+        );
+      cohortMembershipsCreated += Number(membership.changes);
+    }
+
+    const metaCohortId = `META:usage-share-${META_MIN_USAGE_SHARE}`;
+    cohortDefinitionsCreated += insertCohortDefinition(db, {
+      cohortId: metaCohortId,
+      name: "META",
+      aggregationLevel: "PLAYER",
+      ruleVersion: META_RULE_VERSION,
+      ruleParamsJson: JSON.stringify({
+        subject_type: "PLAYER_CARD",
+        metric: "usage_share",
+        minimum_usage_share: META_MIN_USAGE_SHARE,
+        observation_cutoff: "latest_at_or_before_structure_as_of",
+      }),
+    }) ? 1 : 0;
+    for (const state of primaryStates) {
+      cohortMembershipsCreated += syncMetaMembership(db, {
+        cohortId: metaCohortId,
+        state,
+        asOf,
+        minimumUsageShare: META_MIN_USAGE_SHARE,
+      });
+    }
+
+    cohortDefinitionsCreated += insertCohortDefinition(db, {
+      cohortId: "INDIRECT_EXPOSED",
+      name: "INDIRECT_EXPOSED",
+      aggregationLevel: "PLAYER",
+      ruleVersion: INDIRECT_EXPOSED_RULE_VERSION,
+      ruleParamsJson: JSON.stringify({
+        source_cohort: "PACK_EXPOSED",
+        relation_sources: [
+          "SAME_PLAYER_FULL_METADATA",
+          "TEAM_COLOR_POSITION_FULL_METADATA",
+        ],
+        exclude_overlapping_direct_exposure: true,
+      }),
     }) ? 1 : 0;
 
     for (let leftIndex = 0; leftIndex < states.length; leftIndex += 1) {
@@ -516,6 +771,12 @@ export function buildMarketStructure(
         );
       cohortMembershipsCreated += Number(membership.changes);
     }
+
+    cohortMembershipsCreated += insertIndirectExposureMemberships(
+      db,
+      asOf,
+      directExposures,
+    );
 
     db.exec("COMMIT");
     return {
