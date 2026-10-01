@@ -26,17 +26,26 @@ const catalog: StructureSeedCatalog = {
     {
       player_key: "p1",
       primary_instrument: { spid: "100", grade: 1 },
-      selection_observation: { ranker_squad_count: 100, displayed_share_percent: 20 },
+      selection_observation: {
+        ranker_squad_count: 100,
+        displayed_share_percent: 20,
+      },
     },
     {
       player_key: "p2",
       primary_instrument: { spid: "200", grade: 1 },
-      selection_observation: { ranker_squad_count: 90, displayed_share_percent: 10 },
+      selection_observation: {
+        ranker_squad_count: 90,
+        displayed_share_percent: 10,
+      },
     },
     {
       player_key: "p3",
       primary_instrument: { spid: "300", grade: 1 },
-      selection_observation: { ranker_squad_count: 80, displayed_share_percent: 5 },
+      selection_observation: {
+        ranker_squad_count: 80,
+        displayed_share_percent: 5,
+      },
     },
   ],
 };
@@ -99,9 +108,13 @@ function seedCard(
       position_code, performance_metrics_json, source_snapshot_id
     ) VALUES (?, 'PLAYER_CARD', ?, NULL, '2026-09-30T02:00:00.000Z',
       '2026-09-30', 'DAILY_CHART_CLASS_USAGE', 10, ?, NULL, NULL, ?)`,
-  ).run(`usage-${input.spid}`, input.spid, input.usageShare, `usage-src-${input.spid}`);
+  ).run(
+    `usage-${input.spid}`,
+    input.spid,
+    input.usageShare,
+    `usage-src-${input.spid}`,
+  );
 }
-
 
 function seedAdditionalInstrumentForPlayerOne(
   db: ReturnType<typeof openMarketDatabase>,
@@ -128,7 +141,9 @@ function seedAdditionalInstrumentForPlayerOne(
   );
 }
 
-function seedHistoricalDirectExposure(db: ReturnType<typeof openMarketDatabase>): void {
+function seedHistoricalDirectExposure(
+  db: ReturnType<typeof openMarketDatabase>,
+): void {
   db.prepare(
     `INSERT INTO product(
       product_id, name, sale_start, sale_end, price, currency,
@@ -150,11 +165,14 @@ function seedHistoricalDirectExposure(db: ReturnType<typeof openMarketDatabase>)
 test("applies the relation and cohort migration", async () => {
   const db = await tempDb();
   try {
-    assert.equal(MARKET_SCHEMA_VERSION, 5);
+    assert.equal(MARKET_SCHEMA_VERSION, 6);
     const versions = db
       .prepare("SELECT version FROM schema_migration ORDER BY version")
       .all() as Array<{ version: number }>;
-    assert.deepEqual(versions.map((row) => row.version), [1, 2, 3, 4, 5]);
+    assert.deepEqual(
+      versions.map((row) => row.version),
+      [1, 2, 3, 4, 5, 6],
+    );
     assert.deepEqual(countMarketStructureDatabase(db), {
       card_relations: 0,
       relation_snapshots: 0,
@@ -235,13 +253,16 @@ test("builds time-aware substitute relations and frozen cohort membership idempo
          WHERE relation_source = 'TEAM_COLOR_POSITION_FULL_METADATA'`,
       )
       .get() as Record<string, unknown>;
-    assert.deepEqual({ ...relation }, {
-      source_instrument: "100:1",
-      target_instrument: "200:1",
-      same_player: 0,
-      same_position: 1,
-      relation_source: "TEAM_COLOR_POSITION_FULL_METADATA",
-    });
+    assert.deepEqual(
+      { ...relation },
+      {
+        source_instrument: "100:1",
+        target_instrument: "200:1",
+        same_player: 0,
+        same_position: 1,
+        relation_source: "TEAM_COLOR_POSITION_FULL_METADATA",
+      },
+    );
 
     const snapshot = db
       .prepare(
@@ -253,7 +274,9 @@ test("builds time-aware substitute relations and frozen cohort membership idempo
          WHERE cr.relation_source = 'TEAM_COLOR_POSITION_FULL_METADATA'`,
       )
       .get() as Record<string, unknown>;
-    assert.deepEqual(JSON.parse(snapshot.shared_team_colors_json as string), ["Chelsea"]);
+    assert.deepEqual(JSON.parse(snapshot.shared_team_colors_json as string), [
+      "Chelsea",
+    ]);
     assert.equal(snapshot.salary_diff, 1);
     assert.equal(snapshot.ovr_diff, -1);
     assert.equal(snapshot.stat_distance, 3.162278);
@@ -269,12 +292,15 @@ test("builds time-aware substitute relations and frozen cohort membership idempo
          WHERE relation_source = 'SAME_PLAYER_FULL_METADATA'`,
       )
       .get();
-    assert.deepEqual({ ...samePlayer }, {
-      source_instrument: "100:1",
-      target_instrument: "400:1",
-      same_player: 1,
-      same_position: 0,
-    });
+    assert.deepEqual(
+      { ...samePlayer },
+      {
+        source_instrument: "100:1",
+        target_instrument: "400:1",
+        same_player: 1,
+        same_position: 0,
+      },
+    );
 
     const sampleMemberships = db
       .prepare(
@@ -292,11 +318,14 @@ test("builds time-aware substitute relations and frozen cohort membership idempo
          WHERE cohort_id = 'PACK_EXPOSED' AND instrument_id = '100:1'`,
       )
       .get();
-    assert.deepEqual({ ...packMembership }, {
-      valid_from: "2026-09-17T00:00:00.000Z",
-      valid_to: "2026-09-18T00:00:00.000Z",
-      membership_source: "DIRECT_EXPOSURE:exp-1",
-    });
+    assert.deepEqual(
+      { ...packMembership },
+      {
+        valid_from: "2026-09-17T00:00:00.000Z",
+        valid_to: "2026-09-18T00:00:00.000Z",
+        membership_source: "DIRECT_EXPOSURE:exp-1",
+      },
+    );
 
     assert.deepEqual(countMarketStructureDatabase(db), {
       card_relations: 2,

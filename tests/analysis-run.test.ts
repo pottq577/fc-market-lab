@@ -54,14 +54,12 @@ function seedCard(
     input.playerId,
     input.playerId,
   );
-  db.prepare("INSERT INTO player_card(spid, player_id, season) VALUES (?, ?, 'PTG')").run(
-    input.spid,
-    input.playerId,
-  );
-  db.prepare("INSERT INTO instrument(instrument_id, spid, grade) VALUES (?, ?, 1)").run(
-    instrumentId,
-    input.spid,
-  );
+  db.prepare(
+    "INSERT INTO player_card(spid, player_id, season) VALUES (?, ?, 'PTG')",
+  ).run(input.spid, input.playerId);
+  db.prepare(
+    "INSERT INTO instrument(instrument_id, spid, grade) VALUES (?, ?, 1)",
+  ).run(instrumentId, input.spid);
   source(db, `price-${input.spid}`, "2026-10-01T00:00:00.000Z");
   source(db, `meta-${input.spid}`, "2026-10-01T00:00:00.000Z");
   source(db, `usage-${input.spid}`, "2026-10-01T00:00:00.000Z");
@@ -98,7 +96,12 @@ function seedCard(
       position_code, performance_metrics_json, source_snapshot_id
     ) VALUES (?, 'PLAYER_CARD', ?, NULL, '2026-10-01T00:00:00.000Z',
       '2026-10-01', 'DAILY_CHART_CLASS_USAGE', 10, ?, NULL, NULL, ?)`,
-  ).run(`usage-point-${input.spid}`, input.spid, input.usageShare, `usage-${input.spid}`);
+  ).run(
+    `usage-point-${input.spid}`,
+    input.spid,
+    input.usageShare,
+    `usage-${input.spid}`,
+  );
   db.prepare(
     `INSERT INTO cohort_membership(
       cohort_id, instrument_id, valid_from, valid_to, membership_source, confidence
@@ -138,11 +141,14 @@ function seedDerivedStructure(db: ReturnType<typeof openMarketDatabase>): void {
 test("applies the dataset snapshot and analysis run migration", async () => {
   const db = await tempDb();
   try {
-    assert.equal(MARKET_SCHEMA_VERSION, 5);
+    assert.equal(MARKET_SCHEMA_VERSION, 6);
     const versions = db
       .prepare("SELECT version FROM schema_migration ORDER BY version")
       .all() as Array<{ version: number }>;
-    assert.deepEqual(versions.map((row) => row.version), [1, 2, 3, 4, 5]);
+    assert.deepEqual(
+      versions.map((row) => row.version),
+      [1, 2, 3, 4, 5, 6],
+    );
     assert.deepEqual(countAnalysisDatabase(db), {
       dataset_snapshots: 0,
       analysis_runs: 0,
@@ -210,11 +216,14 @@ test("freezes only inputs available at the analysis cutoff and preserves source 
          ORDER BY source_role`,
       )
       .all(first.dataset_snapshot_id);
-    assert.deepEqual(lineage.map((row) => ({ ...row })), [
-      { source_role: "METADATA", count: 2 },
-      { source_role: "PRICE", count: 2 },
-      { source_role: "USAGE", count: 2 },
-    ]);
+    assert.deepEqual(
+      lineage.map((row) => ({ ...row })),
+      [
+        { source_role: "METADATA", count: 2 },
+        { source_role: "PRICE", count: 2 },
+        { source_role: "USAGE", count: 2 },
+      ],
+    );
   } finally {
     db.close();
   }
@@ -236,7 +245,10 @@ test("creates an idempotent analysis run from canonical parameters and code comm
     };
     assert.equal(
       canonicalJson(parameters),
-      canonicalJson({ timezone: "Asia/Seoul", sample_market: { min_valid_count: 10, min_coverage_ratio: 0.6 } }),
+      canonicalJson({
+        timezone: "Asia/Seoul",
+        sample_market: { min_valid_count: 10, min_coverage_ratio: 0.6 },
+      }),
     );
     const first = createAnalysisRun(db, {
       datasetSnapshotId: snapshot.dataset_snapshot_id,
@@ -248,7 +260,10 @@ test("creates an idempotent analysis run from canonical parameters and code comm
     const second = createAnalysisRun(db, {
       datasetSnapshotId: snapshot.dataset_snapshot_id,
       analysisVersion: "poc-analysis-v1",
-      parameters: { timezone: "Asia/Seoul", sample_market: { min_valid_count: 10, min_coverage_ratio: 0.6 } },
+      parameters: {
+        timezone: "Asia/Seoul",
+        sample_market: { min_valid_count: 10, min_coverage_ratio: 0.6 },
+      },
       codeCommit: "8b86d82fa49691d4db66eda07338e0307fcec4e3",
       createdAt: "2026-10-01T12:03:00+09:00",
     });

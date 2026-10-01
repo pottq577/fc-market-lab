@@ -296,15 +296,27 @@ export function createDatasetSnapshot(
         seedInstrumentIds.has(row.target_instrument),
     );
 
+  const cohortDefinitionRows = db
+    .prepare(
+      `SELECT cohort_id, name, aggregation_level, rule_version, rule_params_json
+       FROM cohort_definition
+       ORDER BY cohort_id`,
+    )
+    .all() as Array<{
+      cohort_id: string;
+      name: string;
+      aggregation_level: string;
+      rule_version: string;
+      rule_params_json: string;
+    }>;
   const cohortRows = db
     .prepare(
       `SELECT cohort_id, instrument_id, valid_from
        FROM cohort_membership
        WHERE valid_from <= ?
-         AND (valid_to IS NULL OR ? < valid_to)
        ORDER BY cohort_id, instrument_id, valid_from`,
     )
-    .all(analysisCutoff, analysisCutoff) as Array<{
+    .all(analysisCutoff) as Array<{
       cohort_id: string;
       instrument_id: string;
       valid_from: string;
@@ -395,6 +407,9 @@ export function createDatasetSnapshot(
     relation_keys: relationRows.map(
       (row) => `${row.relation_id}:${row.relation_as_of}`,
     ),
+    cohort_definition_keys: cohortDefinitionRows.map(
+      (row) => `${row.cohort_id}:${row.name}:${row.aggregation_level}:${row.rule_version}:${row.rule_params_json}`,
+    ),
     cohort_membership_keys: cohortRows.map(
       (row) => `${row.cohort_id}:${row.instrument_id}:${row.valid_from}`,
     ),
@@ -478,6 +493,23 @@ export function createDatasetSnapshot(
     );
     for (const row of relationRows) {
       relationInsert.run(datasetSnapshotId, row.relation_id, row.relation_as_of);
+    }
+
+    const cohortDefinitionInsert = db.prepare(
+      `INSERT OR IGNORE INTO dataset_snapshot_cohort_definition(
+        dataset_snapshot_id, cohort_id, name, aggregation_level,
+        rule_version, rule_params_json
+      ) VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    for (const row of cohortDefinitionRows) {
+      cohortDefinitionInsert.run(
+        datasetSnapshotId,
+        row.cohort_id,
+        row.name,
+        row.aggregation_level,
+        row.rule_version,
+        row.rule_params_json,
+      );
     }
 
     const cohortInsert = db.prepare(

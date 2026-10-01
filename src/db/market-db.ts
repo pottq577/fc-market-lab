@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 export const PRICE_HISTORY_SCHEMA_VERSION = 1;
-export const MARKET_SCHEMA_VERSION = 5;
+export const MARKET_SCHEMA_VERSION = 6;
 
 export interface OpenMarketDatabaseOptions {
   migrationPath?: string;
@@ -16,6 +16,7 @@ const DEFAULT_MIGRATION_PATHS: Record<number, string> = {
   3: "db/migrations/003_market_annotations.sql",
   4: "db/migrations/004_market_structure.sql",
   5: "db/migrations/005_analysis_runs.sql",
+  6: "db/migrations/006_market_metrics.sql",
 };
 
 function migrationPathFor(
