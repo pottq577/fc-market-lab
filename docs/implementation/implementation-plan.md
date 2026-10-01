@@ -164,3 +164,45 @@ Gate 0A의 `MANUAL_ONLY` automation decision을 변경하지 않는다.
 
 2026년 10월 1일 실행에서 `AC-001`–`AC-014`가 모두 PASS해 이 단계는 완료됐다.
 완료 이후의 제품 판단은 [리스크와 후속 판단](../risks/risks-and-roadmap.md)에서 관리한다.
+
+## 13. Universe snapshot을 생성한다
+
+PoC 완료 뒤 첫 확장 단계는 [시장 대표성 확장 설계](../product/market-benchmark-v1.md)의 `MARKET_BENCHMARK_V1`을 따른다. 공식 metadata를 기준으로 `CATALOG_UNIVERSE`를 만들고 현재 가격 observation으로 `PRICE_ELIGIBLE_UNIVERSE`를 분리한다.
+
+가능한 grade를 기계적으로 생성하지 않는다. `instrument`는 실제 가격 source observation 또는 별도 evidence가 있을 때만 universe member가 된다.
+
+## 14. 층화 benchmark panel을 생성한다
+
+Player를 sampling unit으로 사용하고 `usage_band × price_band`를 primary stratum으로 만든다. 같은 universe snapshot, panel version, sample seed에서는 같은 member가 선택되도록 stable hash rank를 사용한다.
+
+`P100`, `P200`, `P400`, `P800`은 같은 rank를 공유하는 nested panel로 생성한다. 각 member에 `stratum_id`, inclusion probability, population weight, anchor instrument, `effective_from`을 저장한다.
+
+## 15. Gate 1A 뒤에서 panel 가격을 수집한다
+
+`P100` 수집 전에 price source의 policy evidence와 automation decision을 다시 확인한다. 기존 Gate 0A가 `MANUAL_ONLY`이면 panel 확대만으로 판정을 변경하지 않는다.
+
+`P100`부터 순차 수집하며 접근 제한, fetch failure, stale source를 가격값과 분리한다. 다음 panel은 현재 batch의 source semantics와 provenance가 유지될 때만 진행한다.
+
+## 16. 가중 시장 metric을 구현한다
+
+`BROAD_MARKET` return은 player population weight를 사용한 weighted median으로 계산한다. Breadth, Interquartile Range (IQR), Median Absolute Deviation (MAD)도 weighted 정의를 별도 metric version으로 구현한다.
+
+기존 `SAMPLE_MARKET` metric version은 유지한다. 새 analysis run만 versioned panel과 weighted metric을 참조한다. Weighted coverage가 0.80 미만인 날짜는 `NO_RESULT`로 처리한다.
+
+## 17. 불확실성을 계산한다
+
+각 stratum에서 player를 다시 뽑는 deterministic bootstrap을 구현한다. 기본 1,000 replicate와 pseudo-random seed를 analysis parameter에 저장하고 95% confidence interval을 결과에 연결한다.
+
+Player의 전체 시계열은 같은 replicate 안에서 함께 이동한다. 불확실성을 계산할 수 없는 표본은 `INSUFFICIENT_UNCERTAINTY_SAMPLE`로 남긴다.
+
+## 18. nested panel 수렴을 검증한다
+
+인접 panel pair에서 daily return 차이, 방향 일치율, breadth 차이를 계산한다. 공통 valid 분석일이 60일 미만이면 수렴 판정을 만들지 않는다.
+
+양쪽 인접 pair가 기준을 통과한 가장 작은 중간 panel을 production candidate로 사용한다. `P400↔P800`까지 안정화되지 않으면 benchmark status를 `UNSTABLE`로 유지한다.
+
+## 19. Viewer와 확장 acceptance를 완료한다
+
+Viewer는 `BROAD_MARKET`, `META_MARKET`, `PREMIUM_MARKET`을 분리하고 return, index, breadth와 함께 95% confidence interval, valid player 수, universe 크기, panel version, convergence status를 표시한다.
+
+`MB-001`–`MB-014`를 모두 통과한 analysis version만 `STABLE` benchmark로 표시한다. Panel 생성 이전 history는 `FIXED_PANEL_BACKCAST`로 구분한다. 기존 `AC-001`–`AC-014`와 canonical PoC 결과는 그대로 보존한다.

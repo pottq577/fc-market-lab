@@ -152,3 +152,9 @@ PoC는 다음 기능을 구현하지 않는다:
 
 PoC 완료 기준은 제품 가치의 결론이 아니다.
 완료는 데이터와 분석 구조가 과거 사건을 재현할 수 있다는 의미다.
+
+## PoC 이후 시장 benchmark를 확장한다
+
+Canonical PoC는 현재 범위와 결과를 유지한다. 다음 제품 단계는 [시장 대표성 확장 설계](market-benchmark-v1.md)에서 별도 benchmark로 정의한다.
+
+확장 단계는 universe, 층화 표본, population weight, confidence interval, panel convergence를 추가한다. 기존 `SAMPLE_MARKET` identity와 canonical run은 변경하지 않는다.

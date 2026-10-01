@@ -207,3 +207,39 @@ Data Center의 정식 Gate 0A 판정과 로컬 PoC의 반복 작업 자동화를
 - 결정: Gate 0A의 `MANUAL_ONLY` 판정을 유지하면서 `FC_MARKET_ENABLE_BROWSER_AUTOMATION=1`이 설정된 로컬 환경에서만 Playwright 기반 공개 UI 수집을 허용한다
 - 근거: 현재 검토한 이용약관은 서비스에서 얻은 정보의 무단 복제, 유통, 상업적 이용을 제한하며 반복 자동 추출을 명시적으로 허용하지 않는다. 반면 로컬 PoC에서 20개 seed의 동일 공개 화면을 매번 사람이 저장하는 작업은 분석 로직과 무관한 반복 작업이다
 - 결과: 브라우저 수집은 `OFFICIAL_WEB_UI_PLAYWRIGHT`로 provenance를 분리한다. 로그인, CAPTCHA 우회, stealth, proxy rotation, 비공개 endpoint 직접 호출은 지원하지 않고 HTTP 403 또는 429와 접근 제한 신호에서 중단한다
+
+## ADR-023: frozen PoC sample과 확장 benchmark를 분리한다
+
+Canonical PoC의 재현성과 시장 대표성 확장을 같은 identity에서 처리하지 않는다.
+
+- 상태: Accepted
+- 결정: 기존 `SAMPLE_MARKET` catalog와 canonical run을 유지하고 확장 시장은 versioned universe와 `benchmark_panel`로 새 identity를 만든다
+- 근거: 기존 seed를 교체하면 과거 acceptance와 replay 결과가 표본 변경의 영향을 받아 같은 입력으로 재현되지 않는다
+- 결과: 새 benchmark는 `panel_id`, `universe_snapshot_id`, `analysis_version`을 명시하며 기존 결과를 덮어쓰지 않는다
+
+## ADR-024: 전체 catalog와 장기 가격 수집 범위를 분리한다
+
+시장 구조를 파악하기 위해 모든 instrument의 장기 가격 history를 먼저 수집할 필요는 없다.
+
+- 상태: Accepted
+- 결정: 공식 metadata로 catalog universe를 최대한 넓게 고정하고 가격 history는 price-eligible universe에서 선택한 benchmark panel을 우선 수집한다
+- 근거: metadata inventory는 모집단 구조를 설명하지만 가격 source의 정책과 수집 비용은 별도 제약이다. 두 범위를 묶으면 source viability 확인 전에 수집량이 커진다
+- 결과: player card만 존재하는 grade를 synthetic instrument로 생성하지 않는다. Price source observation 또는 별도 evidence가 있는 `spid + grade`만 instrument universe에 포함한다
+
+## ADR-025: player 단위 층화 표본과 population weight를 사용한다
+
+Class 수가 많은 player와 인기 player 위주의 편의표본이 시장 benchmark를 지배하지 않게 sampling contract를 고정한다.
+
+- 상태: Accepted
+- 결정: player를 1차 sampling unit으로 사용하고 `usage_band × price_band`에서 deterministic nested panel을 추출한다. `BROAD_MARKET`은 stratum population weight로 집계한다
+- 근거: 단순히 seed 수를 늘리면 현재 usage 상위 표본의 편향이 남는다. 층화와 inclusion probability를 저장하면 표본 설계와 결과의 관계를 재현할 수 있다
+- 결과: weighted metric, player-level stratified bootstrap, nested panel convergence를 새 analysis version에 추가한다. Supplemental instrument 수는 player weight를 늘리지 않는다
+
+## ADR-026: panel 생성 이전 history는 contemporaneous market으로 해석하지 않는다
+
+현재 시점의 universe와 panel selection을 과거 날짜의 시장 구성으로 소급하지 않는다.
+
+- 상태: Accepted
+- 결정: panel의 `effective_from` 이전 가격 series는 `FIXED_PANEL_BACKCAST`로 표시하고 contemporaneous `BROAD_MARKET`과 분리한다
+- 근거: 현재 metadata, usage, price eligibility로 선택한 player set을 과거 시장 membership으로 사용하면 look-ahead와 survivorship bias가 생긴다
+- 결과: 새 panel version은 `effective_from` 이후 metric에만 적용한다. 과거 metric row는 다시 쓰지 않고 panel rebalance 시 index level만 연결한다

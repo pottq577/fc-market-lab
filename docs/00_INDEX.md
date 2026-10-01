@@ -19,6 +19,7 @@ meta:
 | 문서                                    | content type | 목표                                          | 대상                | 포함 내용                                     |
 | --------------------------------------- | ------------ | --------------------------------------------- | ------------------- | --------------------------------------------- |
 | `product/prd.md`                        | Conceptual   | 제품이 해결할 문제와 사용자 작업을 설명한다   | 개발자              | 제품 경계, 사용자 작업, 출력 계약, 비목표     |
+| `product/market-benchmark-v1.md`        | Reference    | 확장 시장 benchmark의 표본과 완료 조건을 고정한다 | 개발자, 분석 리뷰어 | universe, 층화 표본, 가중치, 불확실성, 수렴 |
 | `requirements/requirements.md`          | Reference    | 구현 요구사항과 추적 관계를 고정한다          | 개발자, 리뷰어      | 기능 요구사항, 비기능 요구사항, 추적표        |
 | `data/data-contract.md`                 | Reference    | 사용할 데이터와 품질 기준을 고정한다          | 개발자              | 출처, Gate 0A/0B, 가격 의미, 품질 규칙        |
 | `design/domain-model.md`                | Reference    | 시간축을 포함한 도메인 모델을 정의한다        | 개발자              | 선수, 가격, 관계, 이벤트, 상품, cohort        |
@@ -36,7 +37,8 @@ meta:
 docs/
 ├── 00_INDEX.md
 ├── product/
-│   └── prd.md
+│   ├── prd.md
+│   └── market-benchmark-v1.md
 ├── requirements/
 │   └── requirements.md
 ├── data/
@@ -62,13 +64,14 @@ docs/
 제품 의도에서 구현 순서까지 다음 순서로 읽는다:
 
 1. `product/prd.md`
-2. `requirements/requirements.md`
-3. `data/data-contract.md`
-4. `design/domain-model.md`
-5. `design/analysis-model.md`
-6. `architecture/local-poc.md`
-7. `decisions/adr.md`
-8. `poc/poc-plan.md`
-9. `implementation/implementation-plan.md`
-10. `risks/risks-and-roadmap.md`
-11. `poc/completion.md`
+2. `product/market-benchmark-v1.md`
+3. `requirements/requirements.md`
+4. `data/data-contract.md`
+5. `design/domain-model.md`
+6. `design/analysis-model.md`
+7. `architecture/local-poc.md`
+8. `decisions/adr.md`
+9. `poc/poc-plan.md`
+10. `implementation/implementation-plan.md`
+11. `risks/risks-and-roadmap.md`
+12. `poc/completion.md`

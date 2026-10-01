@@ -26,6 +26,10 @@ PoC 결과는 전체 FC온라인 시장의 통계로 일반화하지 않는다.
 선정 기준과 frozen seed set을 보존한다.
 PoC 이후 표본 확대가 필요하면 기존 sample과 새 sample을 같은 이름으로 덮어쓰지 않는다.
 
+다음 단계는 [시장 대표성 확장 설계](../product/market-benchmark-v1.md)에 따라 versioned universe와 층화 benchmark panel을 추가한다. `SAMPLE_MARKET`은 canonical PoC와 회귀 검증용으로 유지한다.
+
+확장 panel도 전체 시장의 확정값으로 취급하지 않는다. Population weight, confidence interval, panel convergence를 함께 계산하고 안정성 기준을 통과하지 못하면 `UNSTABLE`로 표시한다.
+
 ## 신규 class는 긴 분석 window를 지원하지 않을 수 있다
 
 Gate 0B는 출시 후 180일이 지나지 않은 instrument에 full-lifetime coverage를 허용한다.
