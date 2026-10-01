@@ -99,8 +99,8 @@ test("applies the market annotation migration", async () => {
     const versions = db
       .prepare("SELECT version FROM schema_migration ORDER BY version")
       .all() as Array<{ version: number }>;
-    assert.equal(MARKET_SCHEMA_VERSION, 8);
-    assert.deepEqual(versions.map((row) => row.version), [1, 2, 3, 4, 5, 6, 7, 8]);
+    assert.equal(MARKET_SCHEMA_VERSION, 9);
+    assert.deepEqual(versions.map((row) => row.version), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
     assert.deepEqual(countMarketAnnotationDatabase(db), {
       events: 0,
       products: 0,
