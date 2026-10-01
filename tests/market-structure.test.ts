@@ -165,13 +165,13 @@ function seedHistoricalDirectExposure(
 test("applies the relation and cohort migration", async () => {
   const db = await tempDb();
   try {
-    assert.equal(MARKET_SCHEMA_VERSION, 6);
+    assert.equal(MARKET_SCHEMA_VERSION, 7);
     const versions = db
       .prepare("SELECT version FROM schema_migration ORDER BY version")
       .all() as Array<{ version: number }>;
     assert.deepEqual(
       versions.map((row) => row.version),
-      [1, 2, 3, 4, 5, 6],
+      [1, 2, 3, 4, 5, 6, 7],
     );
     assert.deepEqual(countMarketStructureDatabase(db), {
       card_relations: 0,

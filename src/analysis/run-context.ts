@@ -273,6 +273,37 @@ export function createDatasetSnapshot(
     }
   }
 
+  const seedSpids = catalog.seeds.map((seed) => seed.primary_instrument.spid);
+  const seedInstrumentIdList = [...seedInstrumentIds].sort();
+  const usageHistoryRows = db
+    .prepare(
+      `SELECT up.usage_point_id, up.spid, up.instrument_id,
+              up.as_of AS usage_as_of, up.source_snapshot_id
+       FROM usage_point up
+       JOIN source_snapshot ss ON ss.source_snapshot_id = up.source_snapshot_id
+       WHERE (
+           (up.subject_type = 'PLAYER_CARD' AND up.spid IN (${placeholders(seedSpids.length)}))
+           OR
+           (up.subject_type = 'INSTRUMENT'
+            AND up.instrument_id IN (${placeholders(seedInstrumentIdList.length)}))
+         )
+         AND up.as_of <= ?
+         AND ss.observed_at <= ?
+       ORDER BY COALESCE(up.spid, up.instrument_id), up.as_of, up.usage_point_id`,
+    )
+    .all(
+      ...seedSpids,
+      ...seedInstrumentIdList,
+      analysisCutoff,
+      analysisCutoff,
+    ) as Array<{
+      usage_point_id: string;
+      spid: string | null;
+      instrument_id: string | null;
+      usage_as_of: string;
+      source_snapshot_id: string;
+    }>;
+
   const relationRows = (db
     .prepare(
       `SELECT cr.relation_id, cr.source_instrument, cr.target_instrument,
@@ -296,6 +327,31 @@ export function createDatasetSnapshot(
         seedInstrumentIds.has(row.target_instrument),
     );
 
+  const relationHistoryRows = (db
+    .prepare(
+      `SELECT cr.relation_id, cr.source_instrument, cr.target_instrument,
+              cr.valid_from AS relation_valid_from,
+              cr.valid_to AS relation_valid_to,
+              rs.as_of AS relation_as_of
+       FROM card_relation cr
+       JOIN relation_snapshot rs ON rs.relation_id = cr.relation_id
+       WHERE cr.valid_from <= ?
+         AND rs.as_of <= ?
+       ORDER BY cr.relation_id, rs.as_of`,
+    )
+    .all(analysisCutoff, analysisCutoff) as Array<{
+      relation_id: string;
+      source_instrument: string;
+      target_instrument: string;
+      relation_valid_from: string;
+      relation_valid_to: string | null;
+      relation_as_of: string;
+    }>).filter(
+      (row) =>
+        seedInstrumentIds.has(row.source_instrument) ||
+        seedInstrumentIds.has(row.target_instrument),
+    );
+
   const cohortDefinitionRows = db
     .prepare(
       `SELECT cohort_id, name, aggregation_level, rule_version, rule_params_json
@@ -311,7 +367,8 @@ export function createDatasetSnapshot(
     }>;
   const cohortRows = db
     .prepare(
-      `SELECT cohort_id, instrument_id, valid_from
+      `SELECT cohort_id, instrument_id, valid_from, valid_to,
+              membership_source, confidence
        FROM cohort_membership
        WHERE valid_from <= ?
        ORDER BY cohort_id, instrument_id, valid_from`,
@@ -320,6 +377,9 @@ export function createDatasetSnapshot(
       cohort_id: string;
       instrument_id: string;
       valid_from: string;
+      valid_to: string | null;
+      membership_source: string;
+      confidence: number;
     }>;
 
   const eventRows = db
@@ -372,6 +432,10 @@ export function createDatasetSnapshot(
     })),
     ...metadataSources,
     ...usageSources,
+    ...usageHistoryRows.map((row) => ({
+      source_snapshot_id: row.source_snapshot_id,
+      source_role: "USAGE" as const,
+    })),
     ...eventRows.map((row) => ({
       source_snapshot_id: row.source_snapshot_id,
       source_role: "EVENT" as const,
@@ -390,7 +454,7 @@ export function createDatasetSnapshot(
   );
 
   const manifest = {
-    version: 1,
+    version: 2,
     schema_version: input.schemaVersion,
     catalog_id: catalog.catalog_id,
     catalog_hash: catalogHash,
@@ -404,14 +468,22 @@ export function createDatasetSnapshot(
     ),
     metadata_snapshot_ids: metadataRows.map((row) => row.metadata_snapshot_id).sort(),
     usage_point_ids: usageRows.map((row) => row.usage_point_id).sort(),
+    usage_history_keys: usageHistoryRows.map(
+      (row) => `${row.usage_point_id}:${row.usage_as_of}`,
+    ),
     relation_keys: relationRows.map(
       (row) => `${row.relation_id}:${row.relation_as_of}`,
+    ),
+    relation_history_keys: relationHistoryRows.map(
+      (row) =>
+        `${row.relation_id}:${row.relation_as_of}:${row.relation_valid_from}:${row.relation_valid_to ?? ""}`,
     ),
     cohort_definition_keys: cohortDefinitionRows.map(
       (row) => `${row.cohort_id}:${row.name}:${row.aggregation_level}:${row.rule_version}:${row.rule_params_json}`,
     ),
     cohort_membership_keys: cohortRows.map(
-      (row) => `${row.cohort_id}:${row.instrument_id}:${row.valid_from}`,
+      (row) =>
+        `${row.cohort_id}:${row.instrument_id}:${row.valid_from}:${row.valid_to ?? ""}:${row.membership_source}:${row.confidence}`,
     ),
     event_ids: eventRows.map((row) => row.event_id),
     product_ids: productRows.map((row) => row.product_id),
@@ -486,6 +558,21 @@ export function createDatasetSnapshot(
       );
     }
 
+    const usageHistoryInsert = db.prepare(
+      `INSERT OR IGNORE INTO dataset_snapshot_usage_history(
+        dataset_snapshot_id, usage_point_id, spid, instrument_id, usage_as_of
+      ) VALUES (?, ?, ?, ?, ?)`,
+    );
+    for (const row of usageHistoryRows) {
+      usageHistoryInsert.run(
+        datasetSnapshotId,
+        row.usage_point_id,
+        row.spid,
+        row.instrument_id,
+        row.usage_as_of,
+      );
+    }
+
     const relationInsert = db.prepare(
       `INSERT OR IGNORE INTO dataset_snapshot_relation(
         dataset_snapshot_id, relation_id, relation_as_of
@@ -493,6 +580,22 @@ export function createDatasetSnapshot(
     );
     for (const row of relationRows) {
       relationInsert.run(datasetSnapshotId, row.relation_id, row.relation_as_of);
+    }
+
+    const relationHistoryInsert = db.prepare(
+      `INSERT OR IGNORE INTO dataset_snapshot_relation_history(
+        dataset_snapshot_id, relation_id, relation_as_of,
+        relation_valid_from, relation_valid_to
+      ) VALUES (?, ?, ?, ?, ?)`,
+    );
+    for (const row of relationHistoryRows) {
+      relationHistoryInsert.run(
+        datasetSnapshotId,
+        row.relation_id,
+        row.relation_as_of,
+        row.relation_valid_from,
+        row.relation_valid_to,
+      );
     }
 
     const cohortDefinitionInsert = db.prepare(
@@ -514,8 +617,9 @@ export function createDatasetSnapshot(
 
     const cohortInsert = db.prepare(
       `INSERT OR IGNORE INTO dataset_snapshot_cohort_membership(
-        dataset_snapshot_id, cohort_id, instrument_id, valid_from
-      ) VALUES (?, ?, ?, ?)`,
+        dataset_snapshot_id, cohort_id, instrument_id, valid_from,
+        valid_to, membership_source, confidence
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
     );
     for (const row of cohortRows) {
       cohortInsert.run(
@@ -523,6 +627,9 @@ export function createDatasetSnapshot(
         row.cohort_id,
         row.instrument_id,
         row.valid_from,
+        row.valid_to,
+        row.membership_source,
+        row.confidence,
       );
     }
 

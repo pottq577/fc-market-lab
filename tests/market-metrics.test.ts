@@ -57,6 +57,9 @@ function dbFixture(): DatabaseSync {
       cohort_id TEXT NOT NULL,
       instrument_id TEXT NOT NULL,
       valid_from TEXT NOT NULL,
+      valid_to TEXT,
+      membership_source TEXT,
+      confidence REAL,
       PRIMARY KEY (dataset_snapshot_id, cohort_id, instrument_id, valid_from)
     ) STRICT;
     CREATE TABLE dataset_snapshot_cohort_definition (
@@ -83,7 +86,7 @@ function dbFixture(): DatabaseSync {
       PRIMARY KEY (analysis_run_id, metric_date, scope_type, scope_id, metric_name)
     ) STRICT;
   `);
-  db.prepare("INSERT INTO dataset_snapshot VALUES ('ds', '2026-10-03T00:00:00.000Z', 6)").run();
+  db.prepare("INSERT INTO dataset_snapshot VALUES ('ds', '2026-10-03T00:00:00.000Z', 7)").run();
   db.prepare(
     `INSERT INTO analysis_run VALUES (
       'run', 'ds', ?, 'READY', NULL
@@ -133,13 +136,13 @@ function dbFixture(): DatabaseSync {
   for (const instrument of ["100:1", "200:1", "300:1"]) {
     db.prepare("INSERT INTO cohort_membership VALUES ('SAMPLE_MARKET:test', ?, '2026-09-01T00:00:00Z', NULL, 'TEST', 1)")
       .run(instrument);
-    db.prepare("INSERT INTO dataset_snapshot_cohort_membership VALUES ('ds', 'SAMPLE_MARKET:test', ?, '2026-09-01T00:00:00Z')")
+    db.prepare("INSERT INTO dataset_snapshot_cohort_membership VALUES ('ds', 'SAMPLE_MARKET:test', ?, '2026-09-01T00:00:00Z', NULL, 'TEST', 1)")
       .run(instrument);
   }
   for (const instrument of ["100:1", "200:1"]) {
     db.prepare("INSERT INTO cohort_membership VALUES ('CORE:test', ?, '2026-09-01T00:00:00Z', NULL, 'TEST', 1)")
       .run(instrument);
-    db.prepare("INSERT INTO dataset_snapshot_cohort_membership VALUES ('ds', 'CORE:test', ?, '2026-09-01T00:00:00Z')")
+    db.prepare("INSERT INTO dataset_snapshot_cohort_membership VALUES ('ds', 'CORE:test', ?, '2026-09-01T00:00:00Z', NULL, 'TEST', 1)")
       .run(instrument);
   }
   return db;

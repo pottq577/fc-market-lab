@@ -141,13 +141,13 @@ function seedDerivedStructure(db: ReturnType<typeof openMarketDatabase>): void {
 test("applies the dataset snapshot and analysis run migration", async () => {
   const db = await tempDb();
   try {
-    assert.equal(MARKET_SCHEMA_VERSION, 6);
+    assert.equal(MARKET_SCHEMA_VERSION, 7);
     const versions = db
       .prepare("SELECT version FROM schema_migration ORDER BY version")
       .all() as Array<{ version: number }>;
     assert.deepEqual(
       versions.map((row) => row.version),
-      [1, 2, 3, 4, 5, 6],
+      [1, 2, 3, 4, 5, 6, 7],
     );
     assert.deepEqual(countAnalysisDatabase(db), {
       dataset_snapshots: 0,

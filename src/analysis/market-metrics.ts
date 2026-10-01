@@ -296,15 +296,10 @@ function loadCohorts(db: DatabaseSync, datasetSnapshotId: string): {
      ORDER BY cohort_id`,
   ).all(datasetSnapshotId) as CohortDefinition[];
   const memberships = db.prepare(
-    `SELECT dscm.cohort_id, dscm.instrument_id, dscm.valid_from,
-            cm.valid_to, cm.membership_source
-     FROM dataset_snapshot_cohort_membership dscm
-     JOIN cohort_membership cm
-       ON cm.cohort_id = dscm.cohort_id
-      AND cm.instrument_id = dscm.instrument_id
-      AND cm.valid_from = dscm.valid_from
-     WHERE dscm.dataset_snapshot_id = ?
-     ORDER BY dscm.cohort_id, dscm.instrument_id, dscm.valid_from`,
+    `SELECT cohort_id, instrument_id, valid_from, valid_to, membership_source
+     FROM dataset_snapshot_cohort_membership
+     WHERE dataset_snapshot_id = ?
+     ORDER BY cohort_id, instrument_id, valid_from`,
   ).all(datasetSnapshotId) as CohortMembership[];
   return { definitions, memberships };
 }
@@ -381,8 +376,10 @@ export function runMarketMetrics(
     schema_version: number;
   } | undefined;
   if (!run) throw new TypeError(`analysis run ${analysisRunId} does not exist`);
-  if (run.schema_version < 6) {
-    throw new TypeError("analysis run uses a pre-metric dataset snapshot; run prepare:analysis again");
+  if (run.schema_version < 7) {
+    throw new TypeError(
+      "analysis run uses a pre-replay dataset snapshot; run prepare:analysis again",
+    );
   }
   const parameters = parseMarketMetricParameters(JSON.parse(run.parameters_json) as unknown);
   const dailyPrices = loadDailyPrices(db, run.dataset_snapshot_id, parameters);
