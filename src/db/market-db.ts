@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 export const PRICE_HISTORY_SCHEMA_VERSION = 1;
-export const MARKET_SCHEMA_VERSION = 2;
+export const MARKET_SCHEMA_VERSION = 3;
 
 export interface OpenMarketDatabaseOptions {
   migrationPath?: string;
@@ -13,6 +13,7 @@ export interface OpenMarketDatabaseOptions {
 const DEFAULT_MIGRATION_PATHS: Record<number, string> = {
   1: "db/migrations/001_price_history.sql",
   2: "db/migrations/002_metadata_usage.sql",
+  3: "db/migrations/003_market_annotations.sql",
 };
 
 function migrationPathFor(
@@ -95,6 +96,13 @@ export interface MetadataUsageDatabaseCounts {
   usage_points: number;
 }
 
+export interface MarketAnnotationDatabaseCounts {
+  events: number;
+  products: number;
+  rewards: number;
+  exposures: number;
+}
+
 function countTable(db: DatabaseSync, table: string): number {
   const row = db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as
     | { count: number | bigint }
@@ -119,5 +127,16 @@ export function countMetadataUsageDatabase(
     metadata_snapshots: countTable(db, "metadata_snapshot"),
     metadata_snapshot_sources: countTable(db, "metadata_snapshot_source"),
     usage_points: countTable(db, "usage_point"),
+  };
+}
+
+export function countMarketAnnotationDatabase(
+  db: DatabaseSync,
+): MarketAnnotationDatabaseCounts {
+  return {
+    events: countTable(db, "event"),
+    products: countTable(db, "product"),
+    rewards: countTable(db, "reward"),
+    exposures: countTable(db, "exposure"),
   };
 }

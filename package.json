@@ -18,6 +18,8 @@
     "ingest:metadata-detail": "node --experimental-strip-types src/cli/ingest-metadata-detail.ts",
     "collect:ranker-stats": "node --experimental-strip-types src/cli/collect-ranker-stats.ts",
     "ingest:ranker-stats": "node --experimental-strip-types src/cli/ingest-ranker-stats.ts",
+    "annotations:check": "node --experimental-strip-types src/cli/ingest-market-annotations.ts --check",
+    "ingest:annotations": "node --experimental-strip-types src/cli/ingest-market-annotations.ts",
     "catalog:check": "node --experimental-strip-types src/cli/seed-catalog.ts data/catalog/seed-catalog.json",
     "catalog:targets": "node --experimental-strip-types src/cli/seed-catalog.ts data/catalog/seed-catalog.json --targets",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
