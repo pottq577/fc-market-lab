@@ -47,6 +47,12 @@ export interface BenchmarkDiscoveryBatchDocument {
   results: BenchmarkDiscoveryCollectionResult[];
 }
 
+export interface BenchmarkDiscoveryProgressEvent {
+  index: number;
+  total: number;
+  result: BenchmarkDiscoveryCollectionResult;
+}
+
 export interface BenchmarkDiscoveryCollectionOptions {
   outputDir?: string;
   delayMs?: number;
@@ -54,6 +60,7 @@ export interface BenchmarkDiscoveryCollectionOptions {
   maxRetries?: number;
   sleep?: (milliseconds: number) => Promise<void>;
   now?: () => Date;
+  onProgress?: (event: BenchmarkDiscoveryProgressEvent) => void;
   collectTarget?: (
     target: PriceCollectionTarget,
     options?: PriceCollectionOptions,
@@ -143,7 +150,7 @@ export async function collectBenchmarkDiscoveryBatch(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (error instanceof CollectionHaltedError) {
-        results.push({
+        const result: BenchmarkDiscoveryCollectionResult = {
           ...target,
           status: "HALTED",
           observed_at: null,
@@ -154,6 +161,12 @@ export async function collectBenchmarkDiscoveryBatch(
           native_granularity: null,
           history_span: null,
           error_message: message,
+        };
+        results.push(result);
+        input.onProgress?.({
+          index: index + 1,
+          total: targets.targets.length,
+          result,
         });
         halted = true;
         break;
@@ -171,6 +184,12 @@ export async function collectBenchmarkDiscoveryBatch(
         error_message: message,
       });
     }
+
+    input.onProgress?.({
+      index: index + 1,
+      total: targets.targets.length,
+      result: results.at(-1)!,
+    });
 
     if (index < targets.targets.length - 1) {
       await sleep(delayMs);

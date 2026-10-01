@@ -71,6 +71,15 @@ const batch = await collectBenchmarkDiscoveryBatch(targets, gate, {
   ...(delayMs !== undefined ? { delayMs } : {}),
   ...(timeoutMs !== undefined ? { timeoutMs } : {}),
   ...(maxRetries !== undefined ? { maxRetries } : {}),
+  onProgress: ({ index, total, result }) => {
+    const detail =
+      result.status === "COLLECTED"
+        ? `points=${result.point_count ?? 0}`
+        : `error=${result.error_message ?? "unknown"}`;
+    console.error(
+      `[${index}/${total}] rank=${result.sample_rank} ${result.spid}:${result.grade} ${result.status} ${detail}`,
+    );
+  },
 });
 await mkdir(batchDir, { recursive: true });
 const batchPath = join(batchDir, `${batch.batch_id}.json`);

@@ -26,6 +26,8 @@
     "benchmark:gate1a": "node --experimental-strip-types src/cli/gate-1a.ts --require-ready",
     "benchmark:collect-discovery": "node --experimental-strip-types src/cli/collect-benchmark-discovery.ts",
     "benchmark:ingest-discovery": "node --experimental-strip-types src/cli/ingest-benchmark-discovery.ts",
+    "benchmark:discovery-status": "node --experimental-strip-types src/cli/benchmark-discovery-status.ts",
+    "benchmark:discovery-next": "node --experimental-strip-types src/cli/prepare-next-benchmark-discovery.ts",
     "prepare:analysis": "node --experimental-strip-types src/cli/prepare-analysis-run.ts",
     "run:metrics": "node --experimental-strip-types src/cli/run-market-metrics.ts",
     "run:replay": "node --experimental-strip-types src/cli/run-event-replay.ts",
