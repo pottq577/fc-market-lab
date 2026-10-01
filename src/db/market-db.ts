@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 export const PRICE_HISTORY_SCHEMA_VERSION = 1;
-export const MARKET_SCHEMA_VERSION = 3;
+export const MARKET_SCHEMA_VERSION = 4;
 
 export interface OpenMarketDatabaseOptions {
   migrationPath?: string;
@@ -14,6 +14,7 @@ const DEFAULT_MIGRATION_PATHS: Record<number, string> = {
   1: "db/migrations/001_price_history.sql",
   2: "db/migrations/002_metadata_usage.sql",
   3: "db/migrations/003_market_annotations.sql",
+  4: "db/migrations/004_market_structure.sql",
 };
 
 function migrationPathFor(
@@ -103,6 +104,13 @@ export interface MarketAnnotationDatabaseCounts {
   exposures: number;
 }
 
+export interface MarketStructureDatabaseCounts {
+  card_relations: number;
+  relation_snapshots: number;
+  cohort_definitions: number;
+  cohort_memberships: number;
+}
+
 function countTable(db: DatabaseSync, table: string): number {
   const row = db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as
     | { count: number | bigint }
@@ -138,5 +146,16 @@ export function countMarketAnnotationDatabase(
     products: countTable(db, "product"),
     rewards: countTable(db, "reward"),
     exposures: countTable(db, "exposure"),
+  };
+}
+
+export function countMarketStructureDatabase(
+  db: DatabaseSync,
+): MarketStructureDatabaseCounts {
+  return {
+    card_relations: countTable(db, "card_relation"),
+    relation_snapshots: countTable(db, "relation_snapshot"),
+    cohort_definitions: countTable(db, "cohort_definition"),
+    cohort_memberships: countTable(db, "cohort_membership"),
   };
 }

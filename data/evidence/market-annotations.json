@@ -37,6 +37,30 @@
       "source_url": "https://fconline.nexon.com/news/notice/view?n4ArticleSN=6276",
       "confidence": 1,
       "notes": "문제 상품을 9/17 23:59:59까지만 유지하고 9/18 00:00:00부터 판매 종료한 공식 대응."
+    },
+    {
+      "event_id": "locker-room-talk-11-2026-09-28",
+      "event_type": "UPDATE_NOTICE",
+      "title": "라커룸 토크 11화 - 게임플레이 개선 및 신규 특성 조정 예고",
+      "announced_at": "2026-09-28T00:00:00+09:00",
+      "effective_at": null,
+      "ended_at": null,
+      "first_observed_at": null,
+      "source_url": "https://fconline.nexon.com/news/notice/view?n4ArticleSN=6284",
+      "confidence": 1,
+      "notes": "공식 공지는 2026-09-28 공개일만 제공하고 게시 시각은 제공하지 않아 일별 replay용 KST 날짜 경계(00:00)로 기록함. 수비 성공 후 공 연결, 충돌/추적/추가시간 개선과 스피드스터·아크로바틱 피니셔·2개의 심장·크로스 포쳐 조정을 예고함."
+    },
+    {
+      "event_id": "gameplay-balance-2026-09-30",
+      "event_type": "GAMEPLAY_PATCH",
+      "title": "9월 게임 플레이 밸런스 조정 적용",
+      "announced_at": null,
+      "effective_at": "2026-09-30T11:15:00+09:00",
+      "ended_at": null,
+      "first_observed_at": null,
+      "source_url": "https://fconline.nexon.com/news/notice/view?n4ArticleSN=6285",
+      "confidence": 1,
+      "notes": "9/30 정기점검이 오전 11시 15분 조기 오픈되며 라커룸 토크 11화에서 예고한 게임플레이 개선과 신규 특성 4종 밸런스 조정이 적용됨."
     }
   ],
   "products": [

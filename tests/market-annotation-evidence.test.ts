@@ -10,7 +10,7 @@ test("ships the verified stage-6 market annotation evidence", async () => {
   ) as unknown;
   const document = parseMarketAnnotationDocument(raw);
 
-  assert.equal(document.events.length, 3);
+  assert.equal(document.events.length, 5);
   assert.equal(document.products.length, 2);
   assert.equal(
     document.products.reduce((sum, product) => sum + product.rewards.length, 0),
@@ -29,6 +29,17 @@ test("ships the verified stage-6 market annotation evidence", async () => {
   );
   assert.equal(incident?.effective_at, "2026-09-17T03:33:00.000Z");
   assert.equal(incident?.ended_at, "2026-09-17T04:07:00.000Z");
+
+  const lockerRoom = document.events.find(
+    (event) => event.event_id === "locker-room-talk-11-2026-09-28",
+  );
+  assert.equal(lockerRoom?.announced_at, "2026-09-27T15:00:00.000Z");
+  assert.match(lockerRoom?.notes ?? "", /게시 시각은 제공하지 않아/);
+
+  const gameplayPatch = document.events.find(
+    (event) => event.event_id === "gameplay-balance-2026-09-30",
+  );
+  assert.equal(gameplayPatch?.effective_at, "2026-09-30T02:15:00.000Z");
 
   const beforeFix = document.products.find(
     (product) => product.product_id === "sss-mortar-top-price-730-pre-fix",
