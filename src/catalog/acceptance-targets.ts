@@ -153,12 +153,20 @@ export function parseResolvedAcceptanceTargetDocument(
   };
 }
 
+function seasonCode(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const code = value.trim().split(/\s*\(/, 1)[0]?.trim();
+  return code && code !== "" ? code : null;
+}
+
 function seasonId(value: unknown, season: string): number {
   if (!Array.isArray(value)) throw new TypeError("season metadata must be an array");
+  const expected = season.trim().toUpperCase();
   const matches = value.flatMap((item) => {
     const row = record(item, "season metadata entry");
     const id = Number(row.seasonId);
-    return Number.isInteger(id) && row.className === season ? [id] : [];
+    const code = seasonCode(row.className)?.toUpperCase();
+    return Number.isInteger(id) && code === expected ? [id] : [];
   });
   if (matches.length !== 1) {
     throw new TypeError(`season ${season} resolved to ${matches.length} metadata rows`);
