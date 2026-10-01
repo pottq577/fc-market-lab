@@ -22,6 +22,7 @@
     "ingest:annotations": "node --experimental-strip-types src/cli/ingest-market-annotations.ts",
     "build:structure": "node --experimental-strip-types src/cli/build-market-structure.ts",
     "benchmark:universe": "node --experimental-strip-types src/cli/build-market-universe.ts",
+    "benchmark:discovery": "node --experimental-strip-types src/cli/build-benchmark-discovery.ts",
     "prepare:analysis": "node --experimental-strip-types src/cli/prepare-analysis-run.ts",
     "run:metrics": "node --experimental-strip-types src/cli/run-market-metrics.ts",
     "run:replay": "node --experimental-strip-types src/cli/run-event-replay.ts",
