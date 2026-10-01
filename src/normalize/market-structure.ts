@@ -191,28 +191,35 @@ function resolveAsOf(
   if (requestedAsOf) {
     return timestamp(requestedAsOf, "asOf");
   }
-  const latest: string[] = [];
+  const currentValidFrom: string[] = [];
   for (const seed of catalog.seeds) {
     const row = db
       .prepare(
-        `SELECT observed_at
+        `SELECT valid_from
          FROM metadata_snapshot
-         WHERE spid = ? AND completeness = 'FULL'
-         ORDER BY observed_at DESC, metadata_snapshot_id DESC
+         WHERE spid = ?
+           AND completeness = 'FULL'
+           AND valid_to IS NULL
+         ORDER BY valid_from DESC, metadata_snapshot_id DESC
          LIMIT 1`,
       )
-      .get(seed.primary_instrument.spid) as { observed_at: string } | undefined;
+      .get(seed.primary_instrument.spid) as { valid_from: string } | undefined;
     if (!row) {
       throw new TypeError(
-        `FULL metadata for spid=${seed.primary_instrument.spid} is missing; run sync:market first`,
+        `current FULL metadata for spid=${seed.primary_instrument.spid} is missing; run sync:market first`,
       );
     }
-    latest.push(row.observed_at);
+    currentValidFrom.push(row.valid_from);
   }
-  if (latest.length === 0) {
+  if (currentValidFrom.length === 0) {
     throw new TypeError("seed catalog must not be empty");
   }
-  return latest.sort()[0]!;
+
+  // Browser metadata is captured sequentially. The earliest latest snapshot can
+  // still force later cards onto their previous, soon-to-expire snapshot. The
+  // latest current valid_from is the first instant at which every seed's current
+  // FULL metadata is simultaneously valid.
+  return currentValidFrom.sort().at(-1)!;
 }
 
 function cardStateForInstrument(
