@@ -122,7 +122,11 @@ function assertSampleCohort(
   }
 }
 
-function seedPlayerInstrumentIds(db: DatabaseSync, catalog: AnalysisSeedCatalog): Set<string> {
+function analysisInstrumentIds(
+  db: DatabaseSync,
+  catalog: AnalysisSeedCatalog,
+  analysisCutoff: string,
+): Set<string> {
   const players = new Set(catalog.seeds.map((seed) => seed.player_key));
   const rows = db
     .prepare(
@@ -132,9 +136,21 @@ function seedPlayerInstrumentIds(db: DatabaseSync, catalog: AnalysisSeedCatalog)
        ORDER BY i.instrument_id`,
     )
     .all() as Array<{ instrument_id: string; player_id: string }>;
-  return new Set(
+  const ids = new Set(
     rows.filter((row) => players.has(row.player_id)).map((row) => row.instrument_id),
   );
+  const supplemental = db.prepare(
+    `SELECT instrument_id
+     FROM cohort_membership
+     WHERE valid_from <= ?
+     UNION
+     SELECT instrument_id
+     FROM exposure
+     WHERE valid_from <= ?
+     ORDER BY instrument_id`,
+  ).all(analysisCutoff, analysisCutoff) as Array<{ instrument_id: string }>;
+  for (const row of supplemental) ids.add(row.instrument_id);
+  return ids;
 }
 
 function placeholders(count: number): string {
@@ -171,20 +187,21 @@ export function createDatasetSnapshot(
     throw new TypeError("analysis catalog must not be empty");
   }
   assertSampleCohort(db, catalog, analysisCutoff, sampleIds);
-  const seedInstrumentIds = seedPlayerInstrumentIds(db, catalog);
+  const analysisIds = analysisInstrumentIds(db, catalog, analysisCutoff);
+  const analysisIdList = [...analysisIds].sort();
 
   const priceRows = db
     .prepare(
       `SELECT pp.source_snapshot_id, pp.instrument_id, pp.source_timestamp
        FROM price_point pp
        JOIN source_snapshot ss ON ss.source_snapshot_id = pp.source_snapshot_id
-       WHERE pp.instrument_id IN (${placeholders(sampleIds.length)})
+       WHERE pp.instrument_id IN (${placeholders(analysisIdList.length)})
          AND pp.source_timestamp <= ?
          AND pp.observed_at <= ?
          AND ss.observed_at <= ?
        ORDER BY pp.instrument_id, pp.source_timestamp, pp.source_snapshot_id`,
     )
-    .all(...sampleIds, analysisCutoff, analysisCutoff, analysisCutoff) as Array<{
+    .all(...analysisIdList, analysisCutoff, analysisCutoff, analysisCutoff) as Array<{
       source_snapshot_id: string;
       instrument_id: string;
       source_timestamp: string;
@@ -274,7 +291,7 @@ export function createDatasetSnapshot(
   }
 
   const seedSpids = catalog.seeds.map((seed) => seed.primary_instrument.spid);
-  const seedInstrumentIdList = [...seedInstrumentIds].sort();
+  const analysisInstrumentIdList = [...analysisIds].sort();
   const usageHistoryRows = db
     .prepare(
       `SELECT up.usage_point_id, up.spid, up.instrument_id,
@@ -285,7 +302,7 @@ export function createDatasetSnapshot(
            (up.subject_type = 'PLAYER_CARD' AND up.spid IN (${placeholders(seedSpids.length)}))
            OR
            (up.subject_type = 'INSTRUMENT'
-            AND up.instrument_id IN (${placeholders(seedInstrumentIdList.length)}))
+            AND up.instrument_id IN (${placeholders(analysisInstrumentIdList.length)}))
          )
          AND up.as_of <= ?
          AND ss.observed_at <= ?
@@ -293,7 +310,7 @@ export function createDatasetSnapshot(
     )
     .all(
       ...seedSpids,
-      ...seedInstrumentIdList,
+      ...analysisInstrumentIdList,
       analysisCutoff,
       analysisCutoff,
     ) as Array<{
@@ -323,8 +340,8 @@ export function createDatasetSnapshot(
       relation_as_of: string;
     }>).filter(
       (row) =>
-        seedInstrumentIds.has(row.source_instrument) ||
-        seedInstrumentIds.has(row.target_instrument),
+        analysisIds.has(row.source_instrument) ||
+        analysisIds.has(row.target_instrument),
     );
 
   const relationHistoryRows = (db
@@ -348,8 +365,8 @@ export function createDatasetSnapshot(
       relation_as_of: string;
     }>).filter(
       (row) =>
-        seedInstrumentIds.has(row.source_instrument) ||
-        seedInstrumentIds.has(row.target_instrument),
+        analysisIds.has(row.source_instrument) ||
+        analysisIds.has(row.target_instrument),
     );
 
   const cohortDefinitionRows = db
@@ -454,12 +471,13 @@ export function createDatasetSnapshot(
   );
 
   const manifest = {
-    version: 2,
+    version: 3,
     schema_version: input.schemaVersion,
     catalog_id: catalog.catalog_id,
     catalog_hash: catalogHash,
     analysis_cutoff: analysisCutoff,
     sample_instruments: sampleIds,
+    analysis_instruments: analysisIdList,
     source_keys: uniqueSources.map(
       (row) => `${row.source_role}:${row.source_snapshot_id}`,
     ),

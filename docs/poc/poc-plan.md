@@ -123,7 +123,7 @@ PoC는 다음 acceptance criteria를 모두 충족하면 1차 완료로 본다.
 - `AC-006` — 동일 선수 relation, 팀컬러 대체 relation, cohort membership이 시간 유효성과 함께 조회된다
 - `AC-007` — `SAMPLE_MARKET`, `CORE`, `PACK_EXPOSED`, `PREMIUM_SCARCE`에 대해 데이터 충분성 기준을 적용한 index와 relative strength를 계산할 수 있다
 - `AC-008` — 라커룸 토크 11화 replay가 `announced_at` 기준 window와 비교군 결과를 생성한다
-- `AC-009` — SSS 사건 replay가 direct exposure, comparison cohort, Shock candidate, 후속 event를 한 timeline에서 재생한다
+- `AC-009` — SSS 사건 replay가 direct exposure, comparison cohort, Shock detector 평가, 후속 event를 한 timeline에서 재생한다
 - `AC-010` — 기준가 규칙 변경 Regime을 등록하고 기본 return 계산이 경계를 넘지 않는 것을 검증한다
 - `AC-011` — Derived 결과에서 `analysis_run -> dataset_snapshot -> source_snapshot` 경로로 원본까지 추적된다
 - `AC-012` — metric sufficiency 기준 미달 fixture에서 0 대신 `NO_RESULT`를 반환한다

@@ -118,4 +118,26 @@ Regime marker는 공식 source와 수동 annotation으로 등록하고 기본 re
 `poc/poc-plan.md`의 `AC-001`부터 `AC-014`까지 evidence를 남긴다.
 하나라도 실패하면 PoC 완료로 표시하지 않는다.
 
+Acceptance 시나리오에 필요한 supplementary instrument는 frozen `SAMPLE_MARKET` seed를 수정하지 않고
+`data/catalog/acceptance-targets.json`에서 별도 관리한다. Resolved SPID 파일은 공식 metadata에서
+재생성하는 작업 파일이며 Git에 커밋하지 않는다.
+
+Acceptance data coverage를 보강할 때는 다음 순서를 사용한다:
+
+```bash
+npm run acceptance:resolve-targets
+npm run acceptance:collect-targets
+npm run acceptance:ingest-targets
+npm run acceptance:seed-targets
+npm run build:structure
+npm run prepare:analysis
+npm run run:metrics
+npm run run:replay
+npm run run:shock
+npm run acceptance:run
+```
+
+`acceptance:collect-targets`는 operator가 명시적으로 실행하는 기존 experimental collector이며
+Gate 0A의 `MANUAL_ONLY` automation decision을 변경하지 않는다.
+
 기술적 acceptance가 모두 통과한 뒤에만 지표의 실질적 의미, 공개 서비스 가능성, 추가 통계 모델 필요성을 검토한다.

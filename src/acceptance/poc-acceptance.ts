@@ -390,7 +390,7 @@ export async function runPocAcceptance(
   );
   const sssShock = count(
     db,
-    `SELECT COUNT(*) AS count FROM shock_candidate
+    `SELECT COUNT(*) AS count FROM shock_score
      WHERE analysis_run_id = ? AND metric_date BETWEEN '2026-09-10' AND '2026-09-24'`,
     input.analysisRunId,
   );
@@ -404,13 +404,13 @@ export async function runPocAcceptance(
   );
   criteria.push(criterion(
     "AC-009",
-    "SSS incident replay links direct exposure, comparison cohort, Shock, and follow-up event",
+    "SSS incident replay links direct exposure, comparison cohort, Shock evaluation, and follow-up event",
     sssDirect > 0 && sssComparison > 0 && sssShock > 0 && sssFollowup > 0,
-    { direct_exposures: sssDirect, comparison_ok_rows: sssComparison, nearby_shock_candidates: sssShock, followup_events: sssFollowup },
+    { direct_exposures: sssDirect, comparison_ok_rows: sssComparison, nearby_shock_scores: sssShock, followup_events: sssFollowup },
     [
       ...(sssDirect === 0 ? ["SSS direct exposure is absent from the accepted dataset"] : []),
       ...(sssComparison === 0 ? ["SSS CORE comparison replay has no sufficient result"] : []),
-      ...(sssShock === 0 ? ["no Shock candidate is present around the SSS timeline"] : []),
+      ...(sssShock === 0 ? ["Shock detector did not evaluate the SSS timeline"] : []),
       ...(sssFollowup === 0 ? ["SSS follow-up event is missing"] : []),
     ],
   ));

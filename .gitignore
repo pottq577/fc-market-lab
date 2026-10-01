@@ -1,9 +1,14 @@
 docs/source/
+
 node_modules/
+
 data/raw/
 data/exports/
+data/.sync-*
+data/catalog/acceptance-targets.resolved.json
+
 *.db
 *.db-shm
 *.db-wal
+
 .env
-data/.sync-*

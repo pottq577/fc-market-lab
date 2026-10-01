@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "catalog_id": "acceptance-targets-2026-10-01",
+  "targets": [
+    {
+      "target_id": "marc-cucurella-26tots-g11",
+      "player_key": "marc-cucurella",
+      "player_name": "마르크 쿠쿠레야",
+      "season": "26TOTS",
+      "grade": 11,
+      "valid_from": "2026-09-10T15:30:00+09:00",
+      "roles": ["SAME_PLAYER", "REGIME_TARGET", "PREMIUM_SCARCE"],
+      "evidence_urls": [
+        "https://fco.vod.nexoncdn.co.kr/list/2026/6/list_FCO_260625_bPE4lw12oi.html",
+        "https://fconline.nexon.com/news/notice/view?n4ArticleSN=6264"
+      ]
+    },
+    {
+      "target_id": "luis-figo-26fsl-g11",
+      "player_key": "luis-figo",
+      "player_name": "루이스 피구",
+      "season": "26FSL",
+      "grade": 11,
+      "valid_from": "2026-09-17T11:15:00+09:00",
+      "roles": ["PACK_EXPOSED", "PREMIUM_SCARCE"],
+      "evidence_urls": [
+        "https://fco.vod.nexoncdn.co.kr/list/2026/7/list_FCO_260730_g2hAp4oH8wr.html",
+        "https://fco.vod.nexoncdn.co.kr/list/2026/9/info_FCO_260922_lb4Q63IlcwSl7h.html"
+      ]
+    },
+    {
+      "target_id": "ronaldo-26fsl-g11",
+      "player_key": "ronaldo-nazario",
+      "player_name": "호나우두",
+      "season": "26FSL",
+      "grade": 11,
+      "valid_from": "2026-09-17T11:15:00+09:00",
+      "roles": ["PACK_EXPOSED", "PREMIUM_SCARCE"],
+      "evidence_urls": [
+        "https://fco.vod.nexoncdn.co.kr/list/2026/7/list_FCO_260730_g2hAp4oH8wr.html",
+        "https://fco.vod.nexoncdn.co.kr/list/2026/9/info_FCO_260922_lb4Q63IlcwSl7h.html"
+      ]
+    },
+    {
+      "target_id": "johan-cruyff-26fsl-g11",
+      "player_key": "johan-cruyff",
+      "player_name": "요한 크루이프",
+      "season": "26FSL",
+      "grade": 11,
+      "valid_from": "2026-09-17T11:15:00+09:00",
+      "roles": ["PACK_EXPOSED", "PREMIUM_SCARCE"],
+      "evidence_urls": [
+        "https://fco.vod.nexoncdn.co.kr/list/2026/7/list_FCO_260730_g2hAp4oH8wr.html",
+        "https://fco.vod.nexoncdn.co.kr/list/2026/9/info_FCO_260922_lb4Q63IlcwSl7h.html"
+      ]
+    }
+  ]
+}
