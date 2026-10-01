@@ -19,15 +19,25 @@ function readOption(args: string[], name: string): string | undefined {
 
 const args = process.argv.slice(2);
 const positionalInput = args[0] && !args[0].startsWith("--") ? args[0] : undefined;
-const inputPath = readOption(args, "input") ?? positionalInput;
-if (!inputPath) {
-  throw new TypeError(
-    "market annotation input is required: --input <path> or a positional path",
-  );
+const inputPath =
+  readOption(args, "input") ??
+  positionalInput ??
+  "data/evidence/market-annotations.json";
+
+let raw: string;
+try {
+  raw = await readFile(inputPath, "utf8");
+} catch (error) {
+  if (
+    error instanceof Error &&
+    "code" in error &&
+    (error as NodeJS.ErrnoException).code === "ENOENT"
+  ) {
+    throw new Error(`market annotation input not found: ${inputPath}`);
+  }
+  throw error;
 }
-const document = parseMarketAnnotationDocument(
-  JSON.parse(await readFile(inputPath, "utf8")),
-);
+const document = parseMarketAnnotationDocument(JSON.parse(raw));
 if (args.includes("--check")) {
   console.log(
     JSON.stringify(

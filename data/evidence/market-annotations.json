@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "annotated_at": "2026-10-01T09:09:55+09:00",
+  "events": [
+    {
+      "event_id": "sss-mortar-sale-suspension-2026-09-17",
+      "event_type": "INCIDENT",
+      "title": "토끼 가족의 SSS 절구 일부 상품 판매 임시 중단",
+      "announced_at": null,
+      "effective_at": "2026-09-17T12:33:00+09:00",
+      "ended_at": "2026-09-17T13:07:00+09:00",
+      "first_observed_at": "2026-09-17T12:33:00+09:00",
+      "source_url": "https://fconline.nexon.com/news/notice/view?n4ArticleSN=6274",
+      "confidence": 1,
+      "notes": "프리미엄 코인 20개 교환 상품의 구매 가능 횟수 오류로 판매가 임시 중단되었고, 구매 제한 2회 적용 후 판매가 재개됨."
+    }
+  ],
+  "products": [],
+  "exposures": []
+}
