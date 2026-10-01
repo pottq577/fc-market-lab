@@ -3,6 +3,18 @@
   "annotated_at": "2026-10-01T09:09:55+09:00",
   "events": [
     {
+      "event_id": "market-rule-26tots-11-2026-09-10",
+      "event_type": "MARKET_RULE_CHANGE",
+      "title": "26TOTS 11강 기준가 변동 규칙 임시 변경",
+      "announced_at": null,
+      "effective_at": "2026-09-10T15:30:00+09:00",
+      "ended_at": "2026-09-11T00:00:00+09:00",
+      "first_observed_at": null,
+      "source_url": "https://fconline.nexon.com/news/notice/view?n4ArticleSN=6264",
+      "confidence": 1,
+      "notes": "일부 26TOTS 11강 선수의 기준가 변동 규칙을 실 거래+판매 주문 기반에서 실 거래+판매/구매 주문 기반으로 임시 변경한 공식 공지."
+    },
+    {
       "event_id": "sss-mortar-sale-suspension-2026-09-17",
       "event_type": "INCIDENT",
       "title": "토끼 가족의 SSS 절구 일부 상품 판매 임시 중단",
@@ -13,8 +25,81 @@
       "source_url": "https://fconline.nexon.com/news/notice/view?n4ArticleSN=6274",
       "confidence": 1,
       "notes": "프리미엄 코인 20개 교환 상품의 구매 가능 횟수 오류로 판매가 임시 중단되었고, 구매 제한 2회 적용 후 판매가 재개됨."
+    },
+    {
+      "event_id": "sss-mortar-early-sale-end-2026-09-18",
+      "event_type": "PAID_PRODUCT_END",
+      "title": "토끼 가족의 SSS 절구 문제 상품 조기 판매 종료",
+      "announced_at": null,
+      "effective_at": "2026-09-18T00:00:00+09:00",
+      "ended_at": null,
+      "first_observed_at": null,
+      "source_url": "https://fconline.nexon.com/news/notice/view?n4ArticleSN=6276",
+      "confidence": 1,
+      "notes": "문제 상품을 9/17 23:59:59까지만 유지하고 9/18 00:00:00부터 판매 종료한 공식 대응."
     }
   ],
-  "products": [],
+  "products": [
+    {
+      "product_id": "sss-mortar-top-price-730-pre-fix",
+      "name": "UC, SPT, WG, 26FSL 포함 Top Price 730 선수팩 (8~11강, 117+)",
+      "sale_start": "2026-09-17T11:15:00+09:00",
+      "sale_end": "2026-09-17T12:33:00+09:00",
+      "price": 20,
+      "currency": "PREMIUM_COIN",
+      "purchase_limit": null,
+      "channel": "SPECIAL_WEB_SHOP",
+      "source_url": "https://fconline.nexon.com/news/notice/view?n4ArticleSN=6274",
+      "notes": "9/17 정기점검 종료 후 오픈한 문제 상품의 판매 중단 전 구간. purchase_limit=null은 당시 1계정 구매 제한이 설정되지 않았던 상태를 뜻함.",
+      "rewards": [
+        {
+          "reward_id": "sss-mortar-top-price-730-pre-fix-pack",
+          "reward_type": "PLAYER_PACK",
+          "quantity": 1,
+          "probability": null,
+          "class_filter": [
+            "UC",
+            "SPT",
+            "WG",
+            "26FSL"
+          ],
+          "grade_min": 8,
+          "grade_max": 11,
+          "ovr_min": 117,
+          "top_price_n": 730
+        }
+      ]
+    },
+    {
+      "product_id": "sss-mortar-top-price-730-post-fix",
+      "name": "UC, SPT, WG, 26FSL 포함 Top Price 730 선수팩 (8~11강, 117+)",
+      "sale_start": "2026-09-17T13:07:00+09:00",
+      "sale_end": "2026-09-18T00:00:00+09:00",
+      "price": 20,
+      "currency": "PREMIUM_COIN",
+      "purchase_limit": 2,
+      "channel": "SPECIAL_WEB_SHOP",
+      "source_url": "https://fconline.nexon.com/news/notice/view?n4ArticleSN=6276",
+      "notes": "구매 제한 2회 적용 후 판매가 재개된 구간. 이후 대응 공지에 따라 9/18 00:00에 조기 종료됨.",
+      "rewards": [
+        {
+          "reward_id": "sss-mortar-top-price-730-post-fix-pack",
+          "reward_type": "PLAYER_PACK",
+          "quantity": 1,
+          "probability": null,
+          "class_filter": [
+            "UC",
+            "SPT",
+            "WG",
+            "26FSL"
+          ],
+          "grade_min": 8,
+          "grade_max": 11,
+          "ovr_min": 117,
+          "top_price_n": 730
+        }
+      ]
+    }
+  ],
   "exposures": []
 }

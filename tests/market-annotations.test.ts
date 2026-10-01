@@ -64,10 +64,10 @@ function annotationDocument(overrides: Record<string, unknown> = {}) {
     ],
     exposures: [
       {
-        exposure_id: "sss-direct-863239231-g1",
+        exposure_id: "sss-direct-863239231-g8",
         event_id: null,
         product_id: "sss-mortar-top-price-730",
-        instrument_id: "863239231:1",
+        instrument_id: "863239231:8",
         exposure_type: "DIRECT",
         valid_from: "2026-09-17T11:15:00+09:00",
         valid_to: "2026-09-18T00:00:00+09:00",
@@ -79,14 +79,18 @@ function annotationDocument(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function seedInstrument(db: ReturnType<typeof openMarketDatabase>): void {
+function seedInstrument(
+  db: ReturnType<typeof openMarketDatabase>,
+  grade = 8,
+  season = "UC",
+): void {
   db.prepare("INSERT INTO player(player_id, name) VALUES ('p1', '선수')").run();
   db.prepare(
-    "INSERT INTO player_card(spid, player_id, season) VALUES ('863239231', 'p1', 'PTG')",
-  ).run();
+    "INSERT INTO player_card(spid, player_id, season) VALUES ('863239231', 'p1', ?)",
+  ).run(season);
   db.prepare(
-    "INSERT INTO instrument(instrument_id, spid, grade) VALUES ('863239231:1', '863239231', 1)",
-  ).run();
+    "INSERT INTO instrument(instrument_id, spid, grade) VALUES (?, '863239231', ?)",
+  ).run(`863239231:${grade}`, grade);
 }
 
 test("applies the market annotation migration", async () => {
@@ -206,7 +210,7 @@ test("rejects exposure to an unknown instrument", async () => {
     const document = parseMarketAnnotationDocument(annotationDocument());
     assert.throws(
       () => normalizeMarketAnnotations(db, document),
-      /references missing instrument 863239231:1/,
+      /references missing instrument 863239231:8/,
     );
     assert.deepEqual(countMarketAnnotationDatabase(db), {
       events: 0,
@@ -218,6 +222,27 @@ test("rejects exposure to an unknown instrument", async () => {
       .prepare("SELECT COUNT(*) AS count FROM source_snapshot")
       .get() as { count: number | bigint };
     assert.equal(Number(sources.count), 0);
+  } finally {
+    db.close();
+  }
+});
+
+test("rejects direct product exposure outside the reward class or grade filters", async () => {
+  const db = await tempDb();
+  try {
+    seedInstrument(db, 1, "UC");
+    const input = annotationDocument();
+    input.exposures[0]!.instrument_id = "863239231:1";
+    assert.throws(
+      () => normalizeMarketAnnotations(db, parseMarketAnnotationDocument(input)),
+      /does not match any player reward class\/grade filter/,
+    );
+    assert.deepEqual(countMarketAnnotationDatabase(db), {
+      events: 0,
+      products: 0,
+      rewards: 0,
+      exposures: 0,
+    });
   } finally {
     db.close();
   }

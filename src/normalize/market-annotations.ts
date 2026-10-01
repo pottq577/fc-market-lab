@@ -272,6 +272,58 @@ function assertReferenceExists(
   }
 }
 
+function assertDirectProductExposureMatchesRewards(
+  db: DatabaseSync,
+  exposure: ExposureAnnotation,
+): void {
+  if (exposure.exposure_type !== "DIRECT" || !exposure.product_id) {
+    return;
+  }
+
+  const instrument = db
+    .prepare(
+      `SELECT i.grade, pc.season
+       FROM instrument i
+       JOIN player_card pc ON pc.spid = i.spid
+       WHERE i.instrument_id = ?`,
+    )
+    .get(exposure.instrument_id) as
+      | { grade: number; season: string }
+      | undefined;
+  if (!instrument) {
+    return;
+  }
+
+  const rewards = db
+    .prepare(
+      `SELECT class_filter_json, grade_min, grade_max
+       FROM reward
+       WHERE product_id = ?
+         AND reward_type IN ('PLAYER_PACK', 'CHOICE_PACK')`,
+    )
+    .all(exposure.product_id) as Array<{
+      class_filter_json: string | null;
+      grade_min: number | null;
+      grade_max: number | null;
+    }>;
+  const matches = rewards.some((reward) => {
+    const classFilter = reward.class_filter_json === null
+      ? []
+      : JSON.parse(reward.class_filter_json) as string[];
+    const classMatches =
+      classFilter.length === 0 || classFilter.includes(instrument.season);
+    const gradeMatches =
+      (reward.grade_min === null || instrument.grade >= reward.grade_min) &&
+      (reward.grade_max === null || instrument.grade <= reward.grade_max);
+    return classMatches && gradeMatches;
+  });
+  if (!matches) {
+    throw new TypeError(
+      `exposure ${exposure.exposure_id} does not match any player reward class/grade filter for product ${exposure.product_id}`,
+    );
+  }
+}
+
 function insertExposure(db: DatabaseSync, exposure: ExposureAnnotation): boolean {
   assertReferenceExists(
     db,
@@ -298,6 +350,7 @@ function insertExposure(db: DatabaseSync, exposure: ExposureAnnotation): boolean
       `exposure ${exposure.exposure_id}`,
     );
   }
+  assertDirectProductExposureMatchesRewards(db, exposure);
 
   const inserted = db
     .prepare(
