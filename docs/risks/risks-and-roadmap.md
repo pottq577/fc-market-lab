@@ -5,8 +5,8 @@ meta:
 
 # 어떤 리스크와 후속 판단이 남아 있는가
 
-이 문서는 PoC 구현 중 남아 있는 기술, 정책, 분석 리스크와 PoC 이후 판단 항목을 한곳에 관리한다.
-해결된 항목은 관련 ADR이나 evidence를 링크하고 이 목록에서 상태를 갱신한다.
+이 문서는 기술적 PoC 완료 이후에도 남아 있는 정책, 분석, 표본 리스크와 후속 제품 판단을 한곳에 관리한다.
+2026년 10월 1일 `AC-001`–`AC-014`는 모두 통과했지만, 아래 항목은 acceptance 완료와 별개로 계속 유효하다.
 
 문서 계획: [문서 인덱스의 공통 계획](../00_INDEX.md#문서-계획)
 
@@ -87,19 +87,18 @@ PoC는 median return, breadth, relative strength, dispersion으로 표본 내부
 변경할 때는 과거 결과를 조용히 덮어쓰지 않는다.
 새 analysis version 또는 ADR로 남긴다.
 
-## 구현 전에 남은 오픈 질문
+## PoC 완료 후 남은 확장 질문
 
-Gate 0A, frozen seed catalog, Gate 0B evidence로 가격 source와 primary instrument를 확인했다.
-Native granularity는 `P1D`로 확인했다.
-다음 항목은 계속 evidence로 닫는다:
+기술적 acceptance를 위해 필요한 범위는 닫혔지만 전체 제품 범위까지 결정된 것은 아니다:
 
-1. 각 player에서 추적할 grade 범위는 어디까지인가
-2. 첫 팀컬러 대체관계 검증에 사용할 팀컬러는 무엇인가
-3. `CORE`, `HIGH_END`, `PREMIUM_SCARCE`의 첫 rule 또는 수동 seed 기준은 무엇인가
-4. 첫 365일에서 수동 등록할 주요 event 범위는 어디까지인가
-5. 랭커 usage history를 과거 어느 시점까지 복원할 수 있는가
+1. grade 범위는 primary instrument와 supplementary acceptance target까지만 검증했다. 전수 또는 확대 수집 범위는 별도 제품 결정으로 남긴다
+2. 팀컬러 대체 relation의 조회 가능성은 검증했지만 어떤 팀컬러를 대표 분석 대상으로 고정할지는 아직 결정하지 않는다
+3. `CORE`와 `PREMIUM_SCARCE`는 PoC rule을 확보했다. `HIGH_END`는 acceptance 필수 cohort가 아니므로 후속 rule 설계로 남긴다
+4. known event 5건과 필수 replay 사건은 검증했다. 365일 전체의 event annotation 범위는 후속 운영 정책으로 정한다
+5. 현재 usage observation으로 acceptance를 통과했지만 과거 랭커 usage history의 장기 복원 가능성은 계속 제한사항으로 남는다
 
-이 질문은 불확실한 값을 문서에 임의로 채우지 않고 Gate와 catalog 작업에서 결정한다.
+이 항목은 기존 PoC 결과를 덮어쓰지 않는다.
+범위를 확장할 때는 새 catalog, analysis version 또는 ADR을 사용해 기존 canonical run과 구분한다.
 
 ## PoC 이후 판단할 항목
 

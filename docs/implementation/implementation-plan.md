@@ -10,6 +10,18 @@ meta:
 
 문서 계획: [문서 인덱스의 공통 계획](../00_INDEX.md#문서-계획)
 
+## 현재 상태
+
+2026년 10월 1일 기준 1–12단계 구현과 기술적 acceptance가 완료됐다.
+Canonical acceptance run은 `run_97896c0081872d383f941bdab180c3aecc334e377b6752284e65ca840404925e`이며 `AC-001`–`AC-014`가 14/14 PASS다.
+세부 결과는 [PoC 완료 기록](../poc/completion.md)에 보존한다.
+
+현재 로컬 Raw/DB/evidence가 준비된 환경에서는 다음 명령으로 테스트, Gate, strict acceptance를 한 번에 확인한다:
+
+```bash
+npm run poc:verify
+```
+
 ## 1. Gate 0A에서 source viability를 확인한다
 
 소수 instrument로 가격 history의 접근 방식과 이용 조건을 먼저 확인한다:
@@ -141,3 +153,6 @@ npm run acceptance:run
 Gate 0A의 `MANUAL_ONLY` automation decision을 변경하지 않는다.
 
 기술적 acceptance가 모두 통과한 뒤에만 지표의 실질적 의미, 공개 서비스 가능성, 추가 통계 모델 필요성을 검토한다.
+
+2026년 10월 1일 실행에서 `AC-001`–`AC-014`가 모두 PASS해 이 단계는 완료됐다.
+완료 이후의 제품 판단은 [리스크와 후속 판단](../risks/risks-and-roadmap.md)에서 관리한다.

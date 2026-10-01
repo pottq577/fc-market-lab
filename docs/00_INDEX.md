@@ -8,6 +8,9 @@ meta:
 이 문서는 FC온라인 이적시장 인텔리전스 Proof of Concept (PoC)의 문서 구조와 읽는 순서를 정의한다.
 각 문서는 하나의 책임만 가지며, 제품 계약에서 구현과 검증까지 추적할 수 있게 연결한다.
 
+2026년 10월 1일 기준 기술적 PoC acceptance는 `AC-001`–`AC-014` 14개를 모두 통과했다.
+완료 기준 run과 결과 hash는 [PoC 완료 기록](poc/completion.md)에 고정한다.
+
 ## 문서 계획
 
 모든 하위 문서는 이 표를 공통 content plan으로 참조한다.
@@ -23,6 +26,7 @@ meta:
 | `architecture/local-poc.md`             | Reference    | 로컬 실행과 재현 구조를 정의한다              | 개발자              | 데이터 계층, `analysis_run`, 프로젝트 구조    |
 | `decisions/adr.md`                      | Reference    | 주요 설계 결정과 근거를 보존한다              | 개발자, 리뷰어      | Architecture Decision Record (ADR)            |
 | `poc/poc-plan.md`                       | Reference    | PoC 범위와 검증 완료 조건을 고정한다          | 개발자              | 대상 표본, 검증 시나리오, acceptance criteria |
+| `poc/completion.md`                       | Reference    | 완료된 PoC의 기준 run과 검증 결과를 고정한다  | 개발자, 리뷰어      | canonical run, dataset, result hash, 14/14     |
 | `implementation/implementation-plan.md` | How-to       | 구현 순서를 실행 가능한 단계로 정한다         | 개발자              | Gate부터 replay까지의 작업 순서               |
 | `risks/risks-and-roadmap.md`            | Reference    | 남은 위험과 후속 판단을 한곳에 관리한다       | 개발자              | 리스크, 오픈 질문, PoC 이후 판단              |
 
@@ -45,7 +49,8 @@ docs/
 ├── decisions/
 │   └── adr.md
 ├── poc/
-│   └── poc-plan.md
+│   ├── poc-plan.md
+│   └── completion.md
 ├── implementation/
 │   └── implementation-plan.md
 └── risks/
@@ -66,3 +71,4 @@ docs/
 8. `poc/poc-plan.md`
 9. `implementation/implementation-plan.md`
 10. `risks/risks-and-roadmap.md`
+11. `poc/completion.md`

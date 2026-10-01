@@ -27,6 +27,7 @@
     "run:shock": "node --experimental-strip-types src/cli/run-shock-detection.ts",
     "acceptance:run": "node --experimental-strip-types src/cli/run-poc-acceptance.ts",
     "acceptance:require-complete": "node --experimental-strip-types src/cli/run-poc-acceptance.ts --require-complete",
+    "poc:verify": "npm run check && npm run acceptance:require-complete",
     "acceptance:resolve-targets": "node --experimental-strip-types src/cli/resolve-acceptance-targets.ts",
     "acceptance:collect-targets": "node --experimental-strip-types src/cli/collect-datacenter-price.ts --targets data/catalog/acceptance-targets.resolved.json",
     "acceptance:ingest-targets": "node --experimental-strip-types src/cli/ingest-acceptance-targets.ts",

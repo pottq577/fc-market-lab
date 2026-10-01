@@ -130,6 +130,12 @@ PoC는 다음 acceptance criteria를 모두 충족하면 1차 완료로 본다.
 - `AC-013` — replay test가 cutoff 이후 usage, relation snapshot, cohort membership을 참조하지 않는 것을 검증한다
 - `AC-014` — 핵심 분석이 Python과 생성형 인공지능 호출 없이 재현되고 결과가 사실, 계산, 해석, 가설로 구분된다
 
+## 완료 기록
+
+2026년 10월 1일 canonical acceptance run에서 `AC-001`–`AC-014`가 14/14 PASS했다.
+이 판정은 데이터와 분석 구조의 기술적 재현 가능성에 대한 완료 판정이며 서비스 가치나 예측 정확도에 대한 판정이 아니다.
+기준 run, dataset snapshot, result hash와 criterion별 evidence는 [PoC 완료 기록](completion.md)에 고정한다.
+
 ## 완료 판정에서 제외하는 항목
 
 다음 항목은 PoC 완료 여부를 결정하지 않는다:
