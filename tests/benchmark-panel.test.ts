@@ -82,6 +82,7 @@ function fixtureDb(): DatabaseSync {
     ) STRICT;
   `);
   db.exec(readFileSync("db/migrations/012_benchmark_panel.sql", "utf8"));
+  db.exec(readFileSync("db/migrations/013_benchmark_price_strata.sql", "utf8"));
   return db;
 }
 

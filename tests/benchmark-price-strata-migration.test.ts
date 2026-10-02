@@ -66,7 +66,7 @@ test("price-only panel migration preserves v1 rows and enables v2 strata", () =>
       `SELECT usage_band, price_band FROM benchmark_panel_stratum
        WHERE panel_id = 'panel-v1'`,
     ).get() as { usage_band: string | null; price_band: string };
-    assert.deepEqual(preserved, {
+    assert.deepEqual({ ...preserved }, {
       usage_band: "UNOBSERVED",
       price_band: "P00_50",
     });
@@ -87,7 +87,7 @@ test("price-only panel migration preserves v1 rows and enables v2 strata", () =>
        FROM benchmark_panel_stratum
        WHERE panel_id = 'panel-v1' AND stratum_id = 'P95_100'`,
     ).get() as { usage_band: string | null; price_band: string };
-    assert.deepEqual(priceOnly, {
+    assert.deepEqual({ ...priceOnly }, {
       usage_band: null,
       price_band: "P95_100",
     });
