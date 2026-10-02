@@ -20,9 +20,13 @@ const db = openMarketDatabase(dbPath);
 
 try {
   const analysisRunId = requestedRun ?? (db.prepare(
-    `SELECT analysis_run_id
-     FROM analysis_run
-     ORDER BY created_at DESC, analysis_run_id DESC
+    `SELECT ar.analysis_run_id
+     FROM analysis_run ar
+     WHERE EXISTS (
+       SELECT 1 FROM analysis_metric am
+       WHERE am.analysis_run_id = ar.analysis_run_id
+     )
+     ORDER BY ar.created_at DESC, ar.analysis_run_id DESC
      LIMIT 1`,
   ).get() as { analysis_run_id: string } | undefined)?.analysis_run_id;
   if (!analysisRunId) {
