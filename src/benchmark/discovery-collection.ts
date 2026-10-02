@@ -16,6 +16,7 @@ import type {
 
 export type BenchmarkDiscoveryCollectionStatus =
   | "COLLECTED"
+  | "NO_USABLE_PRICE"
   | "FAILED"
   | "HALTED";
 
@@ -84,6 +85,12 @@ function batchId(
     )
     .digest("hex");
   return `discovery_batch_${digest}`;
+}
+
+function isNoUsablePriceFailure(message: string): boolean {
+  return /(?:time must contain at least two (?:entries|date labels)|price graph must contain at least two points)/i.test(
+    message,
+  );
 }
 
 function asResult(
@@ -173,7 +180,9 @@ export async function collectBenchmarkDiscoveryBatch(
       }
       results.push({
         ...target,
-        status: "FAILED",
+        status: isNoUsablePriceFailure(message)
+          ? "NO_USABLE_PRICE"
+          : "FAILED",
         observed_at: null,
         raw_path: null,
         metadata_path: null,
@@ -275,7 +284,11 @@ export function parseBenchmarkDiscoveryBatchDocument(
       throw new TypeError(`${context} must be an object`);
     }
     const resultStatus = readString(item, "status", context)!;
-    if (!["COLLECTED", "FAILED", "HALTED"].includes(resultStatus)) {
+    if (
+      !["COLLECTED", "NO_USABLE_PRICE", "FAILED", "HALTED"].includes(
+        resultStatus,
+      )
+    ) {
       throw new TypeError(`${context}.status is invalid`);
     }
     const grade = Number(item.grade);

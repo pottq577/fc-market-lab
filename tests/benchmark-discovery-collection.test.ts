@@ -98,3 +98,25 @@ test("discovery collection stops immediately on 403/429 style halt", async () =>
     ["COLLECTED", "HALTED"],
   );
 });
+
+
+test("discovery collection classifies too-short price history as terminal no-usable-price", async () => {
+  const batch = await collectBenchmarkDiscoveryBatch(document, gate, {
+    delayMs: 1000,
+    sleep: async () => undefined,
+    collectTarget: async (target) => {
+      if (target.spid === "851000002") {
+        throw new TypeError(
+          "Data Center price response could not be parsed; raw response preserved at /raw/851000002.html: chartData.time must contain at least two entries",
+        );
+      }
+      return collected(target.spid);
+    },
+  });
+
+  assert.equal(batch.status, "COMPLETE");
+  assert.deepEqual(
+    batch.results.map((item) => item.status),
+    ["COLLECTED", "NO_USABLE_PRICE", "COLLECTED"],
+  );
+});

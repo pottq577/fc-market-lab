@@ -90,6 +90,9 @@ await writeFile(batchPath, `${JSON.stringify(batch, null, 2)}\n`, {
 
 const counts = {
   collected: batch.results.filter((item) => item.status === "COLLECTED").length,
+  no_usable_price: batch.results.filter(
+    (item) => item.status === "NO_USABLE_PRICE",
+  ).length,
   failed: batch.results.filter((item) => item.status === "FAILED").length,
   halted: batch.results.filter((item) => item.status === "HALTED").length,
 };

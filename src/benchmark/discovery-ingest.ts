@@ -5,14 +5,19 @@ import type { DatabaseSync } from "node:sqlite";
 import type { SeedPlayer } from "../catalog/seed-catalog.ts";
 import { buildDatacenterPriceCaptureEvidence } from "../evidence/datacenter-price-history.ts";
 import { normalizePriceHistorySnapshot } from "../normalize/price-history.ts";
-import type { BenchmarkDiscoveryBatchDocument } from "./discovery-collection.ts";
+import type {
+  BenchmarkDiscoveryBatchDocument,
+  BenchmarkDiscoveryCollectionResult,
+} from "./discovery-collection.ts";
 
 export interface IngestBenchmarkDiscoveryResult {
   discovery_frame_id: string;
   batch_id: string;
   collected_results: number;
+  no_usable_price_results: number;
   failed_results: number;
   halted_results: number;
+  terminal_outcomes_recorded: number;
   source_snapshots_created: number;
   price_points_inserted: number;
   instruments_processed: number;
@@ -26,6 +31,8 @@ interface DiscoveryMemberRow {
   probe_season_name: string;
   probe_grade: number | bigint;
 }
+
+type TerminalOutcome = "OBSERVED" | "NO_USABLE_PRICE" | "FETCH_FAILED";
 
 function sha256(raw: Buffer): string {
   return `sha256:${createHash("sha256").update(raw).digest("hex")}`;
@@ -49,6 +56,99 @@ function seedFor(
     },
     selection_reason: "benchmark discovery probe",
   };
+}
+
+function discoveryMember(
+  db: DatabaseSync,
+  batch: BenchmarkDiscoveryBatchDocument,
+  result: BenchmarkDiscoveryCollectionResult,
+): DiscoveryMemberRow {
+  const member = db
+    .prepare(
+      `SELECT sample_rank, player_id, player_name,
+              probe_spid, probe_season_name, probe_grade
+       FROM benchmark_discovery_member
+       WHERE discovery_frame_id = ? AND sample_rank = ?`,
+    )
+    .get(batch.discovery_frame_id, result.sample_rank) as
+    | DiscoveryMemberRow
+    | undefined;
+  if (!member) {
+    throw new TypeError(
+      `discovery member rank ${result.sample_rank} is missing from ${batch.discovery_frame_id}`,
+    );
+  }
+  if (
+    member.player_id !== result.player_id ||
+    member.player_name !== result.player_name ||
+    member.probe_spid !== result.spid ||
+    Number(member.probe_grade) !== result.grade
+  ) {
+    throw new TypeError(
+      `batch result rank ${result.sample_rank} does not match frozen discovery member`,
+    );
+  }
+  return member;
+}
+
+function recordTerminalOutcome(
+  db: DatabaseSync,
+  batch: BenchmarkDiscoveryBatchDocument,
+  member: DiscoveryMemberRow,
+  outcome: TerminalOutcome,
+  errorMessage: string | null,
+): boolean {
+  const existing = db
+    .prepare(
+      `SELECT player_id, spid, grade, outcome, error_message
+       FROM benchmark_discovery_outcome
+       WHERE discovery_frame_id = ? AND sample_rank = ?`,
+    )
+    .get(batch.discovery_frame_id, Number(member.sample_rank)) as
+    | {
+        player_id: string;
+        spid: string;
+        grade: number | bigint;
+        outcome: TerminalOutcome;
+        error_message: string | null;
+      }
+    | undefined;
+
+  if (existing) {
+    if (
+      existing.player_id !== member.player_id ||
+      existing.spid !== member.probe_spid ||
+      Number(existing.grade) !== Number(member.probe_grade) ||
+      existing.outcome !== outcome ||
+      existing.error_message !== errorMessage
+    ) {
+      throw new TypeError(
+        `terminal outcome conflict for discovery rank ${String(member.sample_rank)}`,
+      );
+    }
+    return false;
+  }
+
+  const inserted = db
+    .prepare(
+      `INSERT INTO benchmark_discovery_outcome(
+        discovery_frame_id, sample_rank, player_id, spid, grade,
+        outcome, batch_id, source_id, completed_at, error_message
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      batch.discovery_frame_id,
+      Number(member.sample_rank),
+      member.player_id,
+      member.probe_spid,
+      Number(member.probe_grade),
+      outcome,
+      batch.batch_id,
+      batch.source_id,
+      batch.completed_at,
+      errorMessage,
+    );
+  return Number(inserted.changes) === 1;
 }
 
 export async function ingestBenchmarkDiscoveryBatch(
@@ -80,46 +180,49 @@ export async function ingestBenchmarkDiscoveryBatch(
   let sourceSnapshotsCreated = 0;
   let pricePointsInserted = 0;
   let instrumentsProcessed = 0;
+  let terminalOutcomesRecorded = 0;
   let collectedResults = 0;
+  let noUsablePriceResults = 0;
   let failedResults = 0;
   let haltedResults = 0;
 
   for (const result of batch.results) {
-    if (result.status === "FAILED") {
-      failedResults += 1;
-      continue;
-    }
     if (result.status === "HALTED") {
       haltedResults += 1;
       continue;
     }
-    collectedResults += 1;
 
-    const member = db
-      .prepare(
-        `SELECT sample_rank, player_id, player_name,
-                probe_spid, probe_season_name, probe_grade
-         FROM benchmark_discovery_member
-         WHERE discovery_frame_id = ? AND sample_rank = ?`,
+    const member = discoveryMember(db, batch, result);
+    if (result.status === "NO_USABLE_PRICE") {
+      noUsablePriceResults += 1;
+      const message = result.error_message ?? "price history is unavailable";
+      terminalOutcomesRecorded += recordTerminalOutcome(
+        db,
+        batch,
+        member,
+        "NO_USABLE_PRICE",
+        message,
       )
-      .get(batch.discovery_frame_id, result.sample_rank) as
-      | DiscoveryMemberRow
-      | undefined;
-    if (!member) {
-      throw new TypeError(
-        `discovery member rank ${result.sample_rank} is missing from ${batch.discovery_frame_id}`,
-      );
+        ? 1
+        : 0;
+      continue;
     }
-    if (
-      member.player_id !== result.player_id ||
-      member.player_name !== result.player_name ||
-      member.probe_spid !== result.spid ||
-      Number(member.probe_grade) !== result.grade
-    ) {
-      throw new TypeError(
-        `batch result rank ${result.sample_rank} does not match frozen discovery member`,
-      );
+    if (result.status === "FAILED") {
+      failedResults += 1;
+      const message = result.error_message ?? "price collection failed";
+      terminalOutcomesRecorded += recordTerminalOutcome(
+        db,
+        batch,
+        member,
+        "FETCH_FAILED",
+        message,
+      )
+        ? 1
+        : 0;
+      continue;
     }
+
+    collectedResults += 1;
     if (
       result.raw_path === null ||
       result.raw_sha256 === null ||
@@ -191,14 +294,25 @@ export async function ingestBenchmarkDiscoveryBatch(
     sourceSnapshotsCreated += normalized.source_snapshot_created ? 1 : 0;
     pricePointsInserted += normalized.price_points_inserted;
     instrumentsProcessed += 1;
+    terminalOutcomesRecorded += recordTerminalOutcome(
+      db,
+      batch,
+      member,
+      "OBSERVED",
+      null,
+    )
+      ? 1
+      : 0;
   }
 
   return {
     discovery_frame_id: batch.discovery_frame_id,
     batch_id: batch.batch_id,
     collected_results: collectedResults,
+    no_usable_price_results: noUsablePriceResults,
     failed_results: failedResults,
     halted_results: haltedResults,
+    terminal_outcomes_recorded: terminalOutcomesRecorded,
     source_snapshots_created: sourceSnapshotsCreated,
     price_points_inserted: pricePointsInserted,
     instruments_processed: instrumentsProcessed,

@@ -115,8 +115,11 @@ test("ingests collected probes idempotently and preserves existing player identi
 
     assert.equal(first.collected_results, 1);
     assert.equal(first.failed_results, 1);
+    assert.equal(first.no_usable_price_results, 0);
+    assert.equal(first.terminal_outcomes_recorded, 2);
     assert.equal(first.source_snapshots_created, 1);
     assert.equal(first.price_points_inserted, 2);
+    assert.equal(second.terminal_outcomes_recorded, 0);
     assert.equal(second.source_snapshots_created, 0);
     assert.equal(second.price_points_inserted, 0);
 
@@ -140,6 +143,21 @@ test("ingests collected probes idempotently and preserves existing player identi
         .prepare("SELECT COUNT(*) AS count FROM instrument WHERE instrument_id = '851000002:1'")
         .get()!.count,
       0,
+    );
+    assert.deepEqual(
+      db
+        .prepare(
+          `SELECT sample_rank, outcome
+           FROM benchmark_discovery_outcome
+           WHERE discovery_frame_id = 'frame-1'
+           ORDER BY sample_rank`,
+        )
+        .all()
+        .map((row) => ({ ...row })),
+      [
+        { sample_rank: 1, outcome: "OBSERVED" },
+        { sample_rank: 2, outcome: "FETCH_FAILED" },
+      ],
     );
   } finally {
     db.close();

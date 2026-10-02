@@ -44,6 +44,11 @@ function fixtureDb(): DatabaseSync {
       source_snapshot_id TEXT NOT NULL,
       instrument_id TEXT NOT NULL
     ) STRICT;
+    CREATE TABLE benchmark_discovery_outcome (
+      discovery_frame_id TEXT NOT NULL,
+      sample_rank INTEGER NOT NULL,
+      outcome TEXT NOT NULL
+    ) STRICT;
   `);
   db.prepare(
     "INSERT INTO market_universe_snapshot VALUES ('universe-1', '2026-10-01T00:00:00.000Z')",
@@ -78,6 +83,16 @@ function markIngested(db: DatabaseSync, rank: number): void {
   db.prepare("INSERT INTO price_point VALUES (?, ?)").run(sourceId, instrumentId);
 }
 
+function markTerminal(
+  db: DatabaseSync,
+  rank: number,
+  outcome: "NO_USABLE_PRICE" | "FETCH_FAILED",
+): void {
+  db.prepare(
+    "INSERT INTO benchmark_discovery_outcome VALUES ('frame-1', ?, ?)",
+  ).run(rank, outcome);
+}
+
 test("status plans the next contiguous pending range without recollecting ingested ranks", () => {
   const db = fixtureDb();
   try {
@@ -103,6 +118,40 @@ test("status plans the next contiguous pending range without recollecting ingest
       [5, 6],
     );
     assert.equal(next?.universe_as_of, "2026-10-01T00:00:00.000Z");
+  } finally {
+    db.close();
+  }
+});
+
+
+test("terminal nonresponses advance discovery without inflating response coverage", () => {
+  const db = fixtureDb();
+  try {
+    markIngested(db, 1);
+    markIngested(db, 2);
+    markIngested(db, 4);
+    markTerminal(db, 3, "NO_USABLE_PRICE");
+    markTerminal(db, 5, "FETCH_FAILED");
+
+    const status = benchmarkDiscoveryStatus(db, "frame-1", { batchSize: 2 });
+    assert.equal(status.attempted_count, 5);
+    assert.equal(status.observed_count, 3);
+    assert.equal(status.no_usable_price_count, 1);
+    assert.equal(status.failed_count, 1);
+    assert.equal(status.pending_count, 1);
+    assert.equal(status.completion_ratio, 0.833333);
+    assert.equal(status.response_coverage, 0.5);
+    assert.equal(status.readiness, "IN_PROGRESS");
+    assert.equal(status.contiguous_completed_rank, 5);
+    assert.deepEqual(status.next_rank_range, [6, 6]);
+
+    markIngested(db, 6);
+    const complete = benchmarkDiscoveryStatus(db, "frame-1", { batchSize: 2 });
+    assert.equal(complete.attempted_count, 6);
+    assert.equal(complete.pending_count, 0);
+    assert.equal(complete.response_coverage, 0.666667);
+    assert.equal(complete.readiness, "INSUFFICIENT_DISCOVERY_COVERAGE");
+    assert.equal(complete.next_rank_range, null);
   } finally {
     db.close();
   }
