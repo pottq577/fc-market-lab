@@ -70,3 +70,29 @@ test("price-only panel migration preserves v1 rows and enables v2 strata", () =>
       usage_band: "UNOBSERVED",
       price_band: "P00_50",
     });
+
+    db.prepare(
+      `INSERT INTO benchmark_panel_stratum(
+        panel_id, stratum_id, usage_band, price_band,
+        discovery_responder_count, sampled_count,
+        stage2_inclusion_probability, combined_inclusion_probability,
+        population_weight
+      ) VALUES (
+        'panel-v1', 'P95_100', NULL, 'P95_100',
+        1, 1, 1, 0.1, 10
+      )`,
+    ).run();
+    const priceOnly = db.prepare(
+      `SELECT usage_band, price_band
+       FROM benchmark_panel_stratum
+       WHERE panel_id = 'panel-v1' AND stratum_id = 'P95_100'`,
+    ).get() as { usage_band: string | null; price_band: string };
+    assert.deepEqual(priceOnly, {
+      usage_band: null,
+      price_band: "P95_100",
+    });
+    assert.equal(BENCHMARK_PANEL_VERSION, "market-benchmark-panel-v2");
+  } finally {
+    db.close();
+  }
+});

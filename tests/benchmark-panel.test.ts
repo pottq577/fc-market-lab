@@ -126,7 +126,9 @@ function seedDiscovery(
     attempted_count: input.targetSize,
     observed_count: input.observedCount,
     pending_count: 0,
-    response_coverage: Number((input.observedCount / input.targetSize).toFixed(6)),
+    response_coverage: Number(
+      (input.observedCount / input.targetSize).toFixed(6),
+    ),
     readiness: "READY_FOR_PANEL",
   };
 }
@@ -186,7 +188,11 @@ test("builds deterministic nested panels with two-stage population weights", () 
     assert.equal(first.panel_family_id, second.panel_family_id);
     assert.equal(first.eligible_responder_count, 20);
     assert.equal(first.discovery_response_coverage, 0.952381);
-    assert.deepEqual(first.price_boundaries, { p50: 1000, p80: 1600, p95: 1900 });
+    assert.deepEqual(first.price_boundaries, {
+      p50: 1000,
+      p80: 1600,
+      p95: 1900,
+    });
     assert.equal(first.nonempty_stratum_count, 4);
 
     const panels = db
@@ -196,14 +202,27 @@ test("builds deterministic nested panels with two-stage population weights", () 
          WHERE panel_family_id = ?
          ORDER BY panel_size`,
       )
-      .all(first.panel_family_id) as Array<{ panel_id: string; panel_size: number }>;
-    const sets = panels.map((panel) => new Set(
-      (db.prepare(
-        `SELECT player_id FROM benchmark_panel_member
+      .all(first.panel_family_id) as Array<{
+      panel_id: string;
+      panel_size: number;
+    }>;
+    const sets = panels.map(
+      (panel) =>
+        new Set(
+          (
+            db
+              .prepare(
+                `SELECT player_id FROM benchmark_panel_member
          WHERE panel_id = ? ORDER BY admission_rank`,
-      ).all(panel.panel_id) as Array<{ player_id: string }>).map((row) => row.player_id),
-    ));
-    assert.deepEqual(panels.map((row) => row.panel_size), [4, 8, 12, 16]);
+              )
+              .all(panel.panel_id) as Array<{ player_id: string }>
+          ).map((row) => row.player_id),
+        ),
+    );
+    assert.deepEqual(
+      panels.map((row) => row.panel_size),
+      [4, 8, 12, 16],
+    );
     for (let index = 0; index < sets.length - 1; index += 1) {
       for (const playerId of sets[index]!) {
         assert.equal(sets[index + 1]!.has(playerId), true);
@@ -211,23 +230,32 @@ test("builds deterministic nested panels with two-stage population weights", () 
     }
 
     for (const panel of first.panels) {
-      assert.ok(Math.abs(panel.represented_population_weight - 95.238095) < 0.00001);
+      assert.ok(
+        Math.abs(panel.represented_population_weight - 95.238095) < 0.00001,
+      );
     }
 
     const p4 = panels[0]!;
-    const strata = db.prepare(
-      `SELECT discovery_responder_count, sampled_count,
+    const strata = db
+      .prepare(
+        `SELECT discovery_responder_count, sampled_count,
               stage2_inclusion_probability,
               combined_inclusion_probability, population_weight
        FROM benchmark_panel_stratum
        WHERE panel_id = ?
        ORDER BY stratum_id`,
-    ).all(p4.panel_id) as Array<Record<string, number>>;
+      )
+      .all(p4.panel_id) as Array<Record<string, number>>;
     assert.equal(strata.length, 4);
     assert.ok(strata.every((row) => row.sampled_count === 1));
-    assert.ok(strata.every((row) => Math.abs(
-      row.population_weight - 1 / row.combined_inclusion_probability,
-    ) < 0.001));
+    assert.ok(
+      strata.every(
+        (row) =>
+          Math.abs(
+            row.population_weight - 1 / row.combined_inclusion_probability,
+          ) < 0.001,
+      ),
+    );
   } finally {
     db.close();
   }
@@ -243,8 +271,12 @@ test("preserves observed usage bands and keeps missing usage as UNOBSERVED", () 
       db,
       12,
       new Map([
-        [1, 0.1], [2, 0.2], [3, 0.3],
-        [4, 0.4], [5, 0.5], [6, 0.6],
+        [1, 0.1],
+        [2, 0.2],
+        [3, 0.3],
+        [4, 0.4],
+        [5, 0.5],
+        [6, 0.6],
       ]),
     );
 
@@ -256,19 +288,45 @@ test("preserves observed usage bands and keeps missing usage as UNOBSERVED", () 
       createdAt: "2026-10-02T00:01:00.000Z",
     });
 
+    assert.equal(result.stratification_basis, "PRICE_ONLY");
     assert.equal(result.usage_observed_count, 6);
     assert.deepEqual(result.usage_boundaries, { p33: 0.2, p67: 0.4 });
-    const bands = db.prepare(
-      `SELECT usage_band, COUNT(*) AS count
+    const strata = db
+      .prepare(
+        `SELECT stratum_id, usage_band, price_band
+       FROM benchmark_panel_stratum
+       WHERE panel_id = ?
+       ORDER BY stratum_id`,
+      )
+      .all(result.panels[0]!.panel_id) as Array<{
+      stratum_id: string;
+      usage_band: string | null;
+      price_band: string;
+    }>;
+    assert.ok(strata.every((row) => row.usage_band === null));
+    assert.ok(strata.every((row) => row.stratum_id === row.price_band));
+
+    const members = db
+      .prepare(
+        `SELECT stratum_id, usage_band, price_band, usage_value
        FROM benchmark_panel_member
        WHERE panel_id = ?
-       GROUP BY usage_band
-       ORDER BY usage_band`,
-    ).all(result.panels[0]!.panel_id) as Array<{ usage_band: string; count: number }>;
-    assert.ok(bands.some((row) => row.usage_band === "UNOBSERVED"));
-    assert.ok(bands.some((row) => row.usage_band === "LOW_OBSERVED"));
-    assert.ok(bands.some((row) => row.usage_band === "MID_OBSERVED"));
-    assert.ok(bands.some((row) => row.usage_band === "HIGH_OBSERVED"));
+       ORDER BY admission_rank`,
+      )
+      .all(result.panels[0]!.panel_id) as Array<{
+      stratum_id: string;
+      usage_band: string;
+      price_band: string;
+      usage_value: number | null;
+    }>;
+    assert.ok(members.every((row) => row.stratum_id === row.price_band));
+    for (const member of members) {
+      if (member.usage_value === null) {
+        assert.equal(member.usage_band, "UNOBSERVED");
+      } else {
+        assert.notEqual(member.usage_band, "UNOBSERVED");
+      }
+    }
   } finally {
     db.close();
   }
@@ -281,11 +339,16 @@ test("rejects panel creation before discovery is ready", () => {
     seedUniverse(db, "universe-panel", "2026-10-02T00:00:00.000Z");
     const status = seedDiscovery(db, { targetSize: 10, observedCount: 10 });
     assert.throws(
-      () => buildBenchmarkPanels(db, {
-        discoveryStatus: { ...status, readiness: "IN_PROGRESS", pending_count: 1 },
-        universeSnapshotId: "universe-panel",
-        panelSizes: [4],
-      }),
+      () =>
+        buildBenchmarkPanels(db, {
+          discoveryStatus: {
+            ...status,
+            readiness: "IN_PROGRESS",
+            pending_count: 1,
+          },
+          universeSnapshotId: "universe-panel",
+          panelSizes: [4],
+        }),
       /READY_FOR_PANEL/,
     );
   } finally {
@@ -297,7 +360,12 @@ test("rejects a refreshed universe whose catalog provenance drifted", () => {
   const db = fixtureDb();
   try {
     seedUniverse(db, "universe-origin", "2026-10-01T00:00:00.000Z");
-    seedUniverse(db, "universe-panel", "2026-10-02T00:00:00.000Z", "sha256:changed");
+    seedUniverse(
+      db,
+      "universe-panel",
+      "2026-10-02T00:00:00.000Z",
+      "sha256:changed",
+    );
     seedDiscovery(db, { targetSize: 10, observedCount: 10 });
     assert.throws(
       () => resolveBenchmarkPanelUniverseId(db, "frame-1", "universe-panel"),
