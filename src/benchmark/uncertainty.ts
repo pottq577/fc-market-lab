@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
+import { benchmarkReturnAggregation } from "./metrics.ts";
+
 export const BENCHMARK_UNCERTAINTY_VERSION = "market-benchmark-uncertainty-v1";
+export const BENCHMARK_UNCERTAINTY_V2_VERSION = "market-benchmark-uncertainty-v2";
 export const BENCHMARK_UNCERTAINTY_METHOD = "STRATIFIED_PLAYER_BOOTSTRAP";
 export const DEFAULT_BOOTSTRAP_REPLICATES = 1000;
 export const DEFAULT_BOOTSTRAP_CONFIDENCE_LEVEL = 0.95;
@@ -425,6 +428,27 @@ function weightedQuantileFromSorted(
   return fallback;
 }
 
+function weightedMeanFromSorted(
+  sortedIndices: number[],
+  values: Float64Array,
+  counts: Uint16Array,
+  members: MemberRow[],
+  totalWeight: number,
+): number {
+  let weightedSum = 0;
+  let observedWeight = 0;
+  for (const index of sortedIndices) {
+    const weight = effectiveWeight(counts, members, index);
+    if (weight <= 0) continue;
+    weightedSum += values[index]! * weight;
+    observedWeight += weight;
+  }
+  if (observedWeight <= 0 || Math.abs(observedWeight - totalWeight) > 0.000001) {
+    throw new TypeError("weighted mean bootstrap weight does not match valid weight");
+  }
+  return weightedSum / observedWeight;
+}
+
 function weightedMadFromSorted(
   sortedIndices: number[],
   values: Float64Array,
@@ -472,6 +496,7 @@ function bootstrapPanel(
   returns: Map<string, Map<string, ReturnPoint>>,
   baseRows: BaseMetricRow[],
   input: {
+    metricVersion: string;
     replicates: number;
     confidenceLevel: number;
     sampleSeed: string;
@@ -482,6 +507,7 @@ function bootstrapPanel(
   if (members.length !== Number(panel.panel_size)) {
     throw new TypeError(`panel ${panel.panel_id} has ${members.length} members, expected ${String(panel.panel_size)}`);
   }
+  const returnAggregation = benchmarkReturnAggregation(input.metricVersion);
   const byStratum = new Map<string, number[]>();
   members.forEach((member, index) => {
     if (!Number.isFinite(member.population_weight) || member.population_weight <= 0) {
@@ -583,7 +609,7 @@ function bootstrapPanel(
           continue;
         }
 
-        const center = weightedQuantileFromSorted(
+        const medianCenter = weightedQuantileFromSorted(
           sortedIndices,
           values,
           counts,
@@ -591,6 +617,15 @@ function bootstrapPanel(
           validWeight,
           0.5,
         );
+        const returnCenter = returnAggregation === "WEIGHTED_MEAN_PLAYER_RETURN"
+          ? weightedMeanFromSorted(
+              sortedIndices,
+              values,
+              counts,
+              members,
+              validWeight,
+            )
+          : medianCenter;
         const q25 = weightedQuantileFromSorted(
           sortedIndices,
           values,
@@ -613,10 +648,10 @@ function bootstrapPanel(
           counts,
           members,
           validWeight,
-          center,
+          medianCenter,
         );
         const target = distributions.get(date)!;
-        pushDistribution(target.RETURN_1D, round(center));
+        pushDistribution(target.RETURN_1D, round(returnCenter));
         pushDistribution(target.BREADTH, round(positiveWeight / validWeight));
         pushDistribution(target.IQR, round(q75 - q25));
         pushDistribution(target.MAD, round(mad));
@@ -624,7 +659,7 @@ function bootstrapPanel(
         const continuous =
           previousIndexValue !== null && previousIndexDate === previousDate(date);
         const base = continuous ? previousIndexValue! : 100;
-        const indexValue = round(base * (1 + center));
+        const indexValue = round(base * (1 + returnCenter));
         pushDistribution(target.INDEX, indexValue);
         previousIndexValue = indexValue;
         previousIndexDate = date;
@@ -645,6 +680,8 @@ function bootstrapPanel(
       sampling_unit: "PLAYER",
       sampling_policy: "WITH_REPLACEMENT_WITHIN_STRATUM",
       time_series_policy: "WHOLE_PLAYER_SERIES_PER_REPLICATE",
+      metric_version: input.metricVersion,
+      return_aggregation: returnAggregation,
     };
     if (base.status !== "OK") {
       rows.push({
@@ -801,6 +838,7 @@ export function runBenchmarkUncertainty(
       returns,
       baseMetricRows(db, run.benchmark_metric_run_id, panel.panel_id),
       {
+        metricVersion: run.metric_version,
         replicates,
         confidenceLevel,
         sampleSeed,

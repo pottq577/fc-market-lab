@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
 export const BENCHMARK_METRIC_VERSION = "market-benchmark-metrics-v1";
+export const BENCHMARK_METRIC_V2_VERSION = "market-benchmark-metrics-v2";
 export const DEFAULT_BENCHMARK_TIMEZONE = "Asia/Seoul";
 export const DEFAULT_BENCHMARK_PRICE_SEMANTICS = "MARKET_REFERENCE_PRICE";
 export const DEFAULT_MINIMUM_WEIGHTED_COVERAGE = 0.8;
@@ -14,6 +15,15 @@ export type BenchmarkMetricName =
   | "MAD";
 export type BenchmarkMetricStatus = "OK" | "NO_RESULT";
 export type BenchmarkPeriodType = "FIXED_PANEL_BACKCAST" | "CONTEMPORANEOUS";
+export type BenchmarkReturnAggregation =
+  | "WEIGHTED_MEDIAN_PLAYER_RETURN"
+  | "WEIGHTED_MEAN_PLAYER_RETURN";
+
+export function benchmarkReturnAggregation(metricVersion: string): BenchmarkReturnAggregation {
+  return metricVersion === BENCHMARK_METRIC_V2_VERSION
+    ? "WEIGHTED_MEAN_PLAYER_RETURN"
+    : "WEIGHTED_MEDIAN_PLAYER_RETURN";
+}
 
 interface PanelRow {
   panel_id: string;
@@ -221,6 +231,15 @@ export function weightedQuantile(values: WeightedValue[], probability: number): 
 
 export function weightedMedian(values: WeightedValue[]): number {
   return weightedQuantile(values, 0.5);
+}
+
+export function weightedMean(values: WeightedValue[]): number {
+  assertWeightedValues(values);
+  const totalWeight = values.reduce((sum, item) => sum + item.weight, 0);
+  return values.reduce(
+    (sum, item) => sum + item.value * item.weight,
+    0,
+  ) / totalWeight;
 }
 
 export function weightedDispersion(values: WeightedValue[]): {
@@ -540,12 +559,14 @@ function weightedRowsForPanel(
   returns: Map<string, Map<string, ReturnPoint>>,
   allDates: string[],
   timezone: string,
+  metricVersion: string,
   minimumWeightedCoverage: number,
 ): MetricRow[] {
   const totalWeight = members.reduce(
     (sum, member) => sum + member.population_weight,
     0,
   );
+  const returnAggregation = benchmarkReturnAggregation(metricVersion);
   const effectiveFrom = panel.effective_from;
   const rows: MetricRow[] = [];
   const returnRows = new Map<string, MetricRow>();
@@ -580,7 +601,13 @@ function weightedRowsForPanel(
       minimum_weighted_coverage: minimumWeightedCoverage,
       weight_policy: "NO_NONRESPONSE_WEIGHT_REDISTRIBUTION",
     };
-    const center = ok ? round(weightedMedian(valid)) : null;
+    const center = ok
+      ? round(
+          returnAggregation === "WEIGHTED_MEAN_PLAYER_RETURN"
+            ? weightedMean(valid)
+            : weightedMedian(valid),
+        )
+      : null;
     const spread = ok ? weightedDispersion(valid) : null;
     const returnRow: MetricRow = {
       ...common,
@@ -588,7 +615,7 @@ function weightedRowsForPanel(
       value: center,
       details: ok
         ? {
-            aggregation: "WEIGHTED_MEDIAN_PLAYER_RETURN",
+            aggregation: returnAggregation,
             minimum_weighted_coverage: minimumWeightedCoverage,
             weight_policy: "NO_NONRESPONSE_WEIGHT_REDISTRIBUTION",
           }
@@ -772,6 +799,7 @@ export function runBenchmarkMetrics(
       returns,
       allDates,
       timezone,
+      metricVersion,
       minimumWeightedCoverage,
     ),
   );
