@@ -32,6 +32,7 @@
     "benchmark:metrics": "node --experimental-strip-types src/cli/run-benchmark-metrics.ts",
     "benchmark:uncertainty": "node --experimental-strip-types src/cli/run-benchmark-uncertainty.ts",
     "benchmark:convergence": "node --experimental-strip-types src/cli/run-benchmark-convergence.ts",
+    "benchmark:signal-diagnostic": "node --experimental-strip-types src/cli/run-benchmark-signal-diagnostic.ts",
     "benchmark:publish": "node --experimental-strip-types src/cli/publish-benchmark.ts",
     "benchmark:acceptance": "node --experimental-strip-types src/cli/run-benchmark-acceptance.ts",
     "benchmark:acceptance:require-complete": "node --experimental-strip-types src/cli/run-benchmark-acceptance.ts --require-complete",
