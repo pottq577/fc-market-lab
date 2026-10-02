@@ -4,7 +4,7 @@ export function viewerPage(): string {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>FC Market Lab Viewer</title>
+  <title>FC Market Lab · 고급 지표</title>
   <style>
     :root {
       color-scheme: dark;
@@ -19,7 +19,12 @@ export function viewerPage(): string {
     h1 { margin: 0 0 6px; font-size: 25px; letter-spacing: -.03em; }
     h2 { margin: 0 0 14px; font-size: 17px; }
     p { margin: 0; color: #9299aa; font-size: 13px; line-height: 1.5; }
-    .run-picker { min-width: 340px; }
+    .header-actions { display: grid; gap: 9px; justify-items: end; min-width: 390px; }
+    .nav { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .nav a { padding: 7px 10px; border: 1px solid #293142; border-radius: 8px; color: #98a2b7; font-size: 12px; text-decoration: none; }
+    .nav a.active { color: #edf0f7; background: #171c26; border-color: #3b465b; }
+    .run-picker { width: 100%; max-width: 390px; }
+    .eyebrow { color: #73809a; font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; margin-bottom: 5px; }
     select { width: 100%; background: #171a22; color: #edf0f7; border: 1px solid #2b3040; border-radius: 8px; padding: 9px 10px; }
     .cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
     .card, .panel { background: #11141b; border: 1px solid #222733; border-radius: 12px; }
@@ -27,6 +32,8 @@ export function viewerPage(): string {
     .label { color: #7f8799; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
     .value { margin-top: 8px; font-size: 20px; font-variant-numeric: tabular-nums; }
     .panel { padding: 16px; margin-top: 14px; overflow: hidden; }
+    .notice { border-left: 3px solid #7aa2f7; background: #101722; color: #bfc7d6; font-size: 13px; line-height: 1.6; }
+    .notice a { color: #a9c4ff; text-decoration: none; }
     .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
     .toolbar .left, .toolbar .right { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .metric-select { width: 190px; }
@@ -53,7 +60,9 @@ export function viewerPage(): string {
     .error { padding: 20px; border: 1px solid #66363a; background: #251519; border-radius: 10px; color: #ffb3b7; white-space: pre-wrap; }
     @media (max-width: 980px) {
       header { flex-direction: column; }
-      .run-picker { width: 100%; min-width: 0; }
+      .header-actions { width: 100%; min-width: 0; justify-items: stretch; }
+      .nav { justify-content: flex-start; }
+      .run-picker { width: 100%; max-width: none; }
       .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .grid2 { grid-template-columns: 1fr; }
     }
@@ -63,22 +72,40 @@ export function viewerPage(): string {
 <main>
   <header>
     <div>
-      <h1>FC Market Lab</h1>
-      <p>표본 시장 지수, cohort 상대 움직임, 사건 replay와 Shock를 한 화면에서 확인한다.</p>
+      <div class="eyebrow">FC온라인 이적시장</div>
+      <h1>고급 지표</h1>
+      <p>시장 지수와 분석 원시값을 직접 확인하는 검증용 화면이다.</p>
     </div>
-    <div class="run-picker">
-      <div class="label" style="margin-bottom:6px">Analysis run</div>
-      <select id="run-select"></select>
+    <div class="header-actions">
+      <nav class="nav" aria-label="화면 이동">
+        <a href="/">시장 인사이트</a>
+        <a href="/benchmark">시장 대표지표</a>
+        <a class="active" href="/?legacy=1">고급 지표</a>
+      </nav>
+      <div class="run-picker">
+        <div class="label" style="margin-bottom:6px">분석 결과</div>
+        <select id="run-select"></select>
+      </div>
     </div>
   </header>
 
-  <div id="app"><div class="panel">데이터를 불러오는 중...</div></div>
+  <div id="app"><div class="panel">고급 지표를 불러오는 중…</div></div>
 </main>
 <script>
 const palette = ['#7aa2f7','#9ece6a','#e0af68','#bb9af7','#7dcfff','#f7768e','#73daca','#c0caf5'];
 const metricLabels = {
-  INDEX: 'Index', RETURN_1D: '1D Return', RELATIVE_STRENGTH: 'Relative Strength',
-  BREADTH: 'Breadth', IQR: 'IQR', MAD: 'MAD'
+  INDEX: '시장 지수', RETURN_1D: '하루 가격 변동', RELATIVE_STRENGTH: '시장 대비 초과 변동',
+  BREADTH: '가격이 오른 선수 비율', IQR: '중간 50% 변동폭', MAD: '일반적 편차'
+};
+const cohortLabels = {
+  SAMPLE_MARKET: '시장 전체 표본',
+  CORE: '핵심 인기 선수군',
+  META: '메타 상위 선수군',
+  PACK_EXPOSED: '선수팩 직접 공급군',
+  INDIRECT_EXPOSED: '선수팩 간접 영향군'
+};
+const anchorLabels = {
+  ANNOUNCED: '공지 시점', EFFECTIVE: '적용 시점', ENDED: '종료 시점', FIRST_OBSERVED: '최초 관측 시점'
 };
 let payload = null;
 let selectedMetric = 'INDEX';
@@ -96,18 +123,23 @@ function fmt(value, metric) {
   return n.toFixed(2);
 }
 function signedClass(value) { return Number(value) > 0 ? 'positive' : Number(value) < 0 ? 'negative' : ''; }
-function cohortName(id) { return payload?.cohorts.find(c => c.cohort_id === id)?.name ?? id; }
+function cohortName(id) {
+  const raw = payload?.cohorts.find(c => c.cohort_id === id)?.name ?? id;
+  return cohortLabels[raw] ?? raw.replaceAll('_', ' ');
+}
+function anchorLabel(type) { return anchorLabels[type] ?? type.replaceAll('_', ' '); }
 function sampleCohort() { return payload?.cohorts.find(c => c.name === 'SAMPLE_MARKET'); }
 
 async function initRuns() {
   const runs = await fetch('/api/runs').then(r => r.json());
   const select = document.querySelector('#run-select');
   select.innerHTML = runs.map(run =>
-    '<option value="' + esc(run.analysis_run_id) + '">' + esc(run.created_at.slice(0, 19).replace('T',' ')) + ' · ' + esc(run.analysis_version) + '</option>'
+    '<option value="' + esc(run.analysis_run_id) + '">' +
+    esc('데이터 기준 ' + run.analysis_cutoff.slice(0,10) + ' · 생성 ' + run.created_at.slice(0,10)) + '</option>'
   ).join('');
   select.addEventListener('change', () => loadRun(select.value));
   if (runs.length) await loadRun(runs[0].analysis_run_id);
-  else document.querySelector('#app').innerHTML = '<div class="error">볼 수 있는 성공한 analysis run이 없습니다.</div>';
+  else document.querySelector('#app').innerHTML = '<div class="error">표시할 분석 결과가 없다. 먼저 시장 분석을 실행해야 한다.</div>';
 }
 
 async function loadRun(runId) {
@@ -135,20 +167,21 @@ function render() {
   const latestReturn = sample ? latestMetric(sample.cohort_id, 'RETURN_1D') : null;
   const app = document.querySelector('#app');
   app.innerHTML = \
+    '<section class="panel notice">이 화면은 검증과 세부 확인용이다. 시장 흐름을 빠르게 읽을 때는 <a href="/">시장 인사이트</a>의 요약을 먼저 확인한다.</section>' +
     '<section class="cards">' +
-      card('Cutoff', payload.run.analysis_cutoff.slice(0,10)) +
-      card('Sample index', latestIndex ? fmt(latestIndex.value, 'INDEX') : '—') +
-      card('Latest return', latestReturn ? fmt(latestReturn.value, 'RETURN_1D') : '—', latestReturn?.value) +
-      card('Replay anchors', payload.events.length) +
-      card('Shock candidates', payload.shocks.length) +
+      card('데이터 기준일', payload.run.analysis_cutoff.slice(0,10)) +
+      card('시장 지수', latestIndex ? fmt(latestIndex.value, 'INDEX') : '—') +
+      card('최근 하루 변동', latestReturn ? fmt(latestReturn.value, 'RETURN_1D') : '—', latestReturn?.value) +
+      card('등록 이벤트', payload.events.length) +
+      card('급변 감지', payload.shocks.length) +
     '</section>' +
-    '<section class="panel"><div class="toolbar"><div class="left"><h2 style="margin:0">시장 / Cohort 시계열</h2>' +
+    '<section class="panel"><div class="toolbar"><div class="left"><h2 style="margin:0">시장·선수군 원시 시계열</h2>' +
       '<select id="metric-select" class="metric-select">' + Object.entries(metricLabels).map(([k,v]) => '<option value="'+k+'" '+(k===selectedMetric?'selected':'')+'>'+v+'</option>').join('') + '</select></div>' +
       '<div id="cohort-toggles" class="cohorts"></div></div>' +
       '<div id="chart-wrap"><svg id="chart" viewBox="0 0 1200 390" preserveAspectRatio="none"></svg></div><div id="legend" class="legend"></div></section>' +
-    '<section class="grid2"><div class="panel"><div class="toolbar"><h2 style="margin:0">Event replay</h2><div class="right">' +
+    '<section class="grid2"><div class="panel"><div class="toolbar"><h2 style="margin:0">이벤트 전후 원시값</h2><div class="right">' +
       '<select id="event-select" style="width:330px"></select><select id="replay-metric" class="metric-select"></select></div></div><div id="replay-table" class="table-wrap"></div></div>' +
-      '<div class="panel"><h2>Shock candidates</h2><div id="shock-table" class="table-wrap"></div></div></section>';
+      '<div class="panel"><h2>급변 감지 결과</h2><div id="shock-table" class="table-wrap"></div></div></section>';
 
   document.querySelector('#metric-select').addEventListener('change', e => { selectedMetric = e.target.value; renderChart(); });
   renderCohortToggles();
@@ -164,7 +197,7 @@ function renderCohortToggles() {
   const host = document.querySelector('#cohort-toggles');
   host.innerHTML = payload.cohorts.map((c,i) =>
     '<label class="cohort-toggle"><input type="checkbox" data-id="'+esc(c.cohort_id)+'" '+(enabledCohorts.has(c.cohort_id)?'checked':'')+' />' +
-    '<span class="swatch" style="background:'+palette[i%palette.length]+'"></span>'+esc(c.name)+'</label>'
+    '<span class="swatch" style="background:'+palette[i%palette.length]+'"></span>'+esc(cohortName(c.cohort_id))+'</label>'
   ).join('');
   host.querySelectorAll('input').forEach(input => input.addEventListener('change', e => {
     e.target.checked ? enabledCohorts.add(e.target.dataset.id) : enabledCohorts.delete(e.target.dataset.id);
@@ -177,7 +210,7 @@ function renderChart() {
   const legend = document.querySelector('#legend');
   const selected = payload.metrics.filter(m => m.metric_name === selectedMetric && m.status === 'OK' && enabledCohorts.has(m.scope_id));
   if (!selected.length) {
-    svg.innerHTML = '<text x="600" y="195" text-anchor="middle" fill="#6e7688">표시할 OK 결과가 없습니다.</text>';
+    svg.innerHTML = '<text x="600" y="195" text-anchor="middle" fill="#6e7688">이 지표에는 표시 가능한 유효 데이터가 없다.</text>';
     legend.innerHTML = '';
     return;
   }
@@ -217,13 +250,13 @@ function renderChart() {
   svg.innerHTML=html;
   legend.innerHTML=payload.cohorts.filter(c=>enabledCohorts.has(c.cohort_id)).map((c,i) => {
     const realIndex=payload.cohorts.findIndex(x=>x.cohort_id===c.cohort_id);
-    return '<span class="legend-item"><span class="swatch" style="background:'+palette[realIndex%palette.length]+'"></span>'+esc(c.name)+'</span>';
-  }).join('') + '<span class="event-note">점선 = event anchor</span>';
+    return '<span class="legend-item"><span class="swatch" style="background:'+palette[realIndex%palette.length]+'"></span>'+esc(cohortName(c.cohort_id))+'</span>';
+  }).join('') + '<span class="event-note">점선 = 등록 이벤트 날짜</span>';
 }
 
 function renderReplayControls() {
   const eventSelect=document.querySelector('#event-select');
-  eventSelect.innerHTML=payload.events.map((ev,i) => '<option value="'+i+'">'+esc(ev.anchor_date+' · '+ev.title+' · '+ev.anchor_type)+'</option>').join('');
+  eventSelect.innerHTML=payload.events.map((ev,i) => '<option value="'+i+'">'+esc(ev.anchor_date+' · '+ev.title+' · '+anchorLabel(ev.anchor_type))+'</option>').join('');
   const metricSelect=document.querySelector('#replay-metric');
   metricSelect.innerHTML=Object.entries(metricLabels).map(([k,v])=>'<option value="'+k+'" '+(k==='RELATIVE_STRENGTH'?'selected':'')+'>'+v+'</option>').join('');
   eventSelect.addEventListener('change', renderReplayTable);
@@ -234,19 +267,19 @@ function renderReplayTable() {
   const event=payload.events[Number(document.querySelector('#event-select').value || 0)];
   const metric=document.querySelector('#replay-metric').value;
   const host=document.querySelector('#replay-table');
-  if(!event){ host.innerHTML='<div class="muted">Replay event가 없습니다.</div>'; return; }
+  if(!event){ host.innerHTML='<div class="muted">등록된 이벤트가 없다.</div>'; return; }
   const rows=payload.replay.filter(r=>r.event_id===event.event_id && r.anchor_type===event.anchor_type && r.metric_name===metric);
   const offsets=[-7,-3,-1,0,1,3,7];
   const scopes=[...new Set(rows.map(r=>r.scope_id))];
   const map=new Map(rows.map(r=>[r.scope_id+'|'+r.offset_days,r]));
-  host.innerHTML='<table><thead><tr><th>Cohort</th>'+offsets.map(o=>'<th>D'+(o===0?'':o>0?'+'+o:o)+'</th>').join('')+'</tr></thead><tbody>'+
-    scopes.map(scope=>'<tr><td>'+esc(cohortName(scope))+'</td>'+offsets.map(o=>{const r=map.get(scope+'|'+o);return '<td class="'+(r&&r.status==='OK'?signedClass(r.value):'muted')+'" title="'+esc(r?.reason??'')+'">'+(r&&r.status==='OK'?esc(fmt(r.value,metric)):'—')+'</td>';}).join('')+'</tr>').join('')+'</tbody></table>';
+  host.innerHTML='<table><thead><tr><th>선수군</th>'+offsets.map(o=>'<th>'+(o===0?'당일':o>0?o+'일 후':Math.abs(o)+'일 전')+'</th>').join('')+'</tr></thead><tbody>'+
+    scopes.map(scope=>'<tr><td>'+esc(cohortName(scope))+'</td>'+offsets.map(o=>{const r=map.get(scope+'|'+o);return '<td class="'+(r&&r.status==='OK'?signedClass(r.value):'muted')+'" title="'+(r&&r.status==='OK'?'':'이 날짜에는 유효한 값이 없다.')+'">'+(r&&r.status==='OK'?esc(fmt(r.value,metric)):'—')+'</td>';}).join('')+'</tr>').join('')+'</tbody></table>';
 }
 
 function renderShocks() {
   const host=document.querySelector('#shock-table');
-  if(!payload.shocks.length){ host.innerHTML='<div class="muted">검출된 Shock candidate가 없습니다.</div>'; return; }
-  host.innerHTML='<table><thead><tr><th>Date / Cohort</th><th>Return</th><th>z</th></tr></thead><tbody>' + payload.shocks.map(s =>
+  if(!payload.shocks.length){ host.innerHTML='<div class="muted">감지된 급변 날짜가 없다.</div>'; return; }
+  host.innerHTML='<table><thead><tr><th>날짜 / 선수군</th><th>가격 변동</th><th>이상도</th></tr></thead><tbody>' + payload.shocks.map(s =>
     '<tr><td><div class="shock">'+esc(s.metric_date)+'</div><div class="muted">'+esc(cohortName(s.scope_id))+'</div></td><td class="'+signedClass(s.value)+'">'+esc(fmt(s.value,'RETURN_1D'))+'</td><td>'+Number(s.robust_z).toFixed(2)+'</td></tr>'
   ).join('')+'</tbody></table>';
 }

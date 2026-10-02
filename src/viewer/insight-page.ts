@@ -4,7 +4,7 @@ export function insightViewerPage(): string {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>FC Market Lab</title>
+  <title>FC Market Lab · 시장 인사이트</title>
   <style>
     :root {
       color-scheme: dark;
@@ -20,7 +20,12 @@ export function insightViewerPage(): string {
     h2 { margin: 0 0 12px; font-size: 17px; }
     p { margin: 0; color: #9299aa; font-size: 13px; line-height: 1.55; }
     select { width: 100%; background: #171a22; color: #edf0f7; border: 1px solid #2b3040; border-radius: 8px; padding: 9px 10px; }
-    .run-picker { min-width: 340px; }
+    .header-actions { display: grid; gap: 9px; justify-items: end; min-width: 390px; }
+    .nav { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .nav a { padding: 7px 10px; border: 1px solid #293142; border-radius: 8px; color: #98a2b7; font-size: 12px; text-decoration: none; }
+    .nav a.active { color: #edf0f7; background: #171c26; border-color: #3b465b; }
+    .run-picker { width: 100%; max-width: 390px; }
+    .eyebrow { color: #73809a; font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; margin-bottom: 5px; }
     .panel, .card { background: #11141b; border: 1px solid #222733; border-radius: 12px; }
     .panel { padding: 16px; margin-top: 14px; overflow: hidden; }
     .cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
@@ -33,6 +38,13 @@ export function insightViewerPage(): string {
     .muted { color: #687184; }
     .insight { border-left: 3px solid #7aa2f7; padding: 13px 15px; background: #101722; border-radius: 8px; }
     .insight strong { color: #f2f4f8; }
+    .insight-head { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: baseline; justify-content: space-between; }
+    .data-basis { color: #748096; font-size: 11px; }
+    details.terms { margin-top: 12px; border-top: 1px solid #252a35; padding-top: 10px; }
+    details.terms summary { cursor: pointer; color: #9ba6b9; font-size: 12px; }
+    .term-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-top: 9px; }
+    .term { padding: 9px 10px; border-radius: 8px; background: #0d1016; color: #8d97a9; font-size: 11px; line-height: 1.5; }
+    .term strong { display: block; color: #c5ccda; margin-bottom: 2px; }
     .insight-lines { display: grid; gap: 6px; margin-top: 7px; color: #bdc4d4; font-size: 13px; line-height: 1.5; }
     .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
     .toolbar .left, .toolbar .right { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -66,10 +78,13 @@ export function insightViewerPage(): string {
     .error { padding: 20px; border: 1px solid #66363a; background: #251519; border-radius: 10px; color: #ffb3b7; white-space: pre-wrap; }
     @media (max-width: 980px) {
       header { flex-direction: column; }
-      .run-picker { width: 100%; min-width: 0; }
+      .header-actions { width: 100%; min-width: 0; justify-items: stretch; }
+      .nav { justify-content: flex-start; }
+      .run-picker { width: 100%; max-width: none; }
       .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .grid2 { grid-template-columns: 1fr; }
       .event-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .term-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -77,15 +92,23 @@ export function insightViewerPage(): string {
 <main>
   <header>
     <div>
-      <h1>FC Market Lab</h1>
-      <p>시장 방향, cohort 차이, 사건 이후 반응을 먼저 읽고 필요할 때 원시 지표를 내려본다.</p>
+      <div class="eyebrow">FC온라인 이적시장</div>
+      <h1>시장 인사이트</h1>
+      <p>최근 시장 흐름, 강한 선수군, 이벤트 이후 반응을 먼저 요약한다.</p>
     </div>
-    <div class="run-picker">
-      <div class="label" style="margin-bottom:6px">Analysis run</div>
-      <select id="run-select"></select>
+    <div class="header-actions">
+      <nav class="nav" aria-label="화면 이동">
+        <a class="active" href="/">시장 인사이트</a>
+        <a href="/benchmark">시장 대표지표</a>
+        <a href="/?legacy=1">고급 지표</a>
+      </nav>
+      <div class="run-picker">
+        <div class="label" style="margin-bottom:6px">분석 결과</div>
+        <select id="run-select"></select>
+      </div>
     </div>
   </header>
-  <div id="app"><div class="panel">데이터를 불러오는 중...</div></div>
+  <div id="app"><div class="panel">시장 데이터를 불러오는 중…</div></div>
 </main>
 <script>
 const palette = ['#7aa2f7','#9ece6a','#e0af68','#bb9af7','#7dcfff','#f7768e','#73daca','#c0caf5'];
@@ -94,6 +117,19 @@ let payload = null;
 let chartMode = 'CHANGE';
 let chartWindow = 90;
 let enabledCohorts = new Set();
+const cohortLabels = {
+  SAMPLE_MARKET: '시장 전체 표본',
+  CORE: '핵심 인기 선수군',
+  META: '메타 상위 선수군',
+  PACK_EXPOSED: '선수팩 직접 공급군',
+  INDIRECT_EXPOSED: '선수팩 간접 영향군'
+};
+const anchorLabels = {
+  ANNOUNCED: '공지 시점',
+  EFFECTIVE: '적용 시점',
+  ENDED: '종료 시점',
+  FIRST_OBSERVED: '최초 관측 시점'
+};
 
 function esc(value) {
   return String(value ?? '').replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
@@ -103,11 +139,19 @@ function pct(value) {
   const n = Number(value) * 100;
   return (n > 0 ? '+' : '') + n.toFixed(2) + '%';
 }
+function plainPct(value) {
+  if (value == null || Number.isNaN(Number(value))) return '—';
+  return (Number(value) * 100).toFixed(2) + '%';
+}
 function signedClass(value) {
   return Number(value) > 0 ? 'positive' : Number(value) < 0 ? 'negative' : '';
 }
 function cohortName(id) {
-  return payload?.cohorts.find(c => c.cohort_id === id)?.name ?? id;
+  const raw = payload?.cohorts.find(c => c.cohort_id === id)?.name ?? id;
+  return cohortLabels[raw] ?? raw.replaceAll('_', ' ');
+}
+function anchorLabel(type) {
+  return anchorLabels[type] ?? type.replaceAll('_', ' ');
 }
 function sampleCohort() {
   return payload?.cohorts.find(c => c.name === 'SAMPLE_MARKET') ?? null;
@@ -154,12 +198,24 @@ function latestBreadth() {
   );
   return row?.value ?? null;
 }
+function latestCoverage() {
+  const sample = sampleCohort();
+  const latest = latestDate();
+  if (!sample || !latest) return null;
+  const row = payload.metrics.find(m =>
+    m.scope_id === sample.cohort_id &&
+    m.metric_date === latest &&
+    m.metric_name === 'INDEX' &&
+    m.status === 'OK'
+  );
+  return row?.coverage_ratio ?? null;
+}
 function rankCohorts(days) {
   return payload.cohorts
     .filter(c => c.name !== 'SAMPLE_MARKET')
     .flatMap(c => {
       const change = changeOver(c.cohort_id, days);
-      return change == null ? [] : [{ id: c.cohort_id, name: c.name, change }];
+      return change == null ? [] : [{ id: c.cohort_id, name: cohortName(c.cohort_id), change }];
     })
     .sort((a, b) => b.change - a.change || a.name.localeCompare(b.name));
 }
@@ -192,8 +248,10 @@ function eventInsight(event) {
   const relative = latestOffset == null ? [] : rows
     .filter(r => r.offset_days === latestOffset && r.metric_name === 'RELATIVE_STRENGTH' && r.value != null)
     .flatMap(r => {
-      const name = cohortName(r.scope_id);
-      return name === 'SAMPLE_MARKET' ? [] : [{ id: r.scope_id, name, change: Number(r.value) }];
+      const cohort = payload?.cohorts.find(candidate => candidate.cohort_id === r.scope_id);
+      return cohort?.name === 'SAMPLE_MARKET'
+        ? []
+        : [{ id: r.scope_id, name: cohortName(r.scope_id), change: Number(r.value) }];
     })
     .sort((a, b) => b.change - a.change || a.name.localeCompare(b.name));
 
@@ -219,12 +277,12 @@ async function initRuns() {
   const select = document.querySelector('#run-select');
   select.innerHTML = runs.map(run =>
     '<option value="' + esc(run.analysis_run_id) + '">' +
-    esc(run.created_at.slice(0, 19).replace('T', ' ')) + ' · ' + esc(run.analysis_version) +
+    esc('데이터 기준 ' + run.analysis_cutoff.slice(0, 10) + ' · 생성 ' + run.created_at.slice(0, 10)) +
     '</option>'
   ).join('');
   select.addEventListener('change', () => loadRun(select.value));
   if (runs.length) await loadRun(runs[0].analysis_run_id);
-  else document.querySelector('#app').innerHTML = '<div class="error">볼 수 있는 성공한 analysis run이 없습니다.</div>';
+  else document.querySelector('#app').innerHTML = '<div class="error">표시할 분석 결과가 없다. 먼저 시장 분석을 실행해야 한다.</div>';
 }
 
 async function loadRun(runId) {
@@ -248,7 +306,7 @@ async function loadRun(runId) {
 
 function summaryLines() {
   const sample = sampleCohort();
-  if (!sample) return '<div>• SAMPLE_MARKET cohort가 없어 시장 요약을 만들 수 없다.</div>';
+  if (!sample) return '<div>• 시장 전체 표본이 없어 시장 요약을 만들 수 없다.</div>';
   const change7 = changeOver(sample.cohort_id, 7);
   const change30 = changeOver(sample.cohort_id, 30);
   const breadth = latestBreadth();
@@ -259,7 +317,7 @@ function summaryLines() {
   const lines = [];
 
   if (change7 != null && change30 != null) {
-    lines.push('<div>• SAMPLE_MARKET은 최근 7일 <strong class="' + signedClass(change7) + '">' +
+    lines.push('<div>• 시장 전체 표본은 최근 7일 <strong class="' + signedClass(change7) + '">' +
       pct(change7) + '</strong>, 최근 30일 <strong class="' + signedClass(change30) + '">' +
       pct(change30) + '</strong> 움직였다.</div>');
   }
@@ -267,15 +325,15 @@ function summaryLines() {
     let breadthText = '상승/하락이 혼재돼 있다';
     if (Number(breadth) >= .7) breadthText = '표본 다수가 함께 상승했다';
     else if (Number(breadth) <= .3) breadthText = '상승이 소수에 제한됐다';
-    lines.push('<div>• 최신 상승 breadth는 <strong>' + pct(breadth) + '</strong> — ' + breadthText + '.</div>');
+    lines.push('<div>• 최신 관측일에 가격이 오른 선수 비율은 <strong>' + plainPct(breadth) + '</strong>. ' + breadthText + '.</div>');
   }
   if (strongest && weakest) {
-    lines.push('<div>• 최근 7일 cohort 중 <strong>' + esc(strongest.name) + ' ' + pct(strongest.change) +
+    lines.push('<div>• 최근 7일 선수군 중 <strong>' + esc(strongest.name) + ' ' + pct(strongest.change) +
       '</strong>가 가장 강하고, <strong>' + esc(weakest.name) + ' ' + pct(weakest.change) +
       '</strong>가 가장 약했다.</div>');
   }
-  lines.push('<div>• 최근 30일 Shock candidate는 <strong>' + shocks.length +
-    '</strong>건이다. Shock는 원인 판정이 아니라 비정상 변동 후보만 뜻한다.</div>');
+  lines.push('<div>• 최근 30일 급변 신호는 <strong>' + shocks.length +
+    '</strong>건 감지됐다. 급변 감지는 원인을 뜻하지 않는다.</div>');
   return lines.join('');
 }
 
@@ -286,42 +344,49 @@ function render() {
   const breadth = latestBreadth();
   const ranked = rankCohorts(7);
   const strongest = ranked[0] ?? null;
+  const coverage = latestCoverage();
   const shocks30 = shocksInLast(30);
   const app = document.querySelector('#app');
 
   app.innerHTML =
-    '<section class="insight"><strong>지금 이 데이터가 말하는 것</strong><div class="insight-lines">' +
+    '<section class="insight"><div class="insight-head"><strong>현재 시장 요약</strong><span class="data-basis">데이터 기준 ' + esc(latestDate() ?? '—') + (coverage == null ? '' : ' · 표본 반영률 ' + plainPct(coverage)) + '</span></div><div class="insight-lines">' +
       summaryLines() + '</div></section>' +
     '<section class="cards" style="margin-top:14px">' +
-      card('시장 7일', pct(change7), change7, 'SAMPLE_MARKET') +
-      card('시장 30일', pct(change30), change30, 'SAMPLE_MARKET') +
-      card('상승 breadth', pct(breadth), breadth, '최신 관측일') +
-      card('7일 강한 cohort', strongest?.name ?? '—', strongest?.change ?? null, strongest ? pct(strongest.change) : '비교 데이터 부족') +
-      card('최근 30일 Shock', String(shocks30.length), null, '통계적 이상치 후보') +
+      card('최근 7일 시장', pct(change7), change7, '시장 전체 표본') +
+      card('최근 30일 시장', pct(change30), change30, '시장 전체 표본') +
+      card('가격이 오른 선수 비율', plainPct(breadth), null, '최신 관측일 기준') +
+      card('7일 변동 상위 선수군', strongest?.name ?? '—', strongest?.change ?? null, strongest ? pct(strongest.change) : '비교 데이터 부족') +
+      card('최근 30일 급변 감지', String(shocks30.length), null, '평소 변동 범위를 벗어난 신호') +
     '</section>' +
+    '<details class="terms"><summary>이 화면의 용어 보기</summary><div class="term-grid">' +
+      '<div class="term"><strong>선수군</strong>비슷한 조건으로 묶어 함께 비교하는 선수 집단</div>' +
+      '<div class="term"><strong>시장 전체 표본</strong>시장 흐름의 기준으로 쓰는 대표 선수 집단</div>' +
+      '<div class="term"><strong>가격이 오른 선수 비율</strong>전일보다 가격이 오른 선수가 표본에서 차지하는 비중</div>' +
+      '<div class="term"><strong>급변 감지</strong>평소 변동 범위를 통계적으로 크게 벗어난 날짜 후보</div>' +
+    '</div></details>' +
     '<section class="panel">' +
-      '<div class="toolbar"><div class="left"><div><h2 style="margin:0 0 4px">Cohort 움직임 비교</h2>' +
-      '<p>기본값은 각 cohort의 표시 구간 첫 관측을 0%로 다시 맞춘 누적 변화다.</p></div>' +
+      '<div class="toolbar"><div class="left"><div><h2 style="margin:0 0 4px">선수군별 가격 흐름</h2>' +
+      '<p>각 선수군의 시작점을 0%로 맞춰, 같은 기간 동안 어느 집단이 더 많이 움직였는지 비교한다.</p></div>' +
       '<select id="mode-select" class="metric-select">' +
-        '<option value="CHANGE">기간 누적 변화</option>' +
-        '<option value="RETURN_1D">1일 수익률</option>' +
-        '<option value="RELATIVE_STRENGTH">시장 대비 상대강도</option>' +
-        '<option value="BREADTH">상승 breadth</option>' +
+        '<option value="CHANGE">기간 누적 등락</option>' +
+        '<option value="RETURN_1D">하루 가격 변동</option>' +
+        '<option value="RELATIVE_STRENGTH">시장 대비 초과 변동</option>' +
+        '<option value="BREADTH">가격이 오른 선수 비율</option>' +
       '</select>' +
       '<select id="window-select" class="window-select">' +
         '<option value="30">30일</option><option value="90" selected>90일</option><option value="0">전체</option>' +
       '</select></div><div id="cohort-toggles" class="cohorts"></div></div>' +
       '<svg id="chart" viewBox="0 0 1200 390" preserveAspectRatio="none"></svg>' +
       '<div id="legend" class="legend"></div><div id="event-chips" class="event-chips"></div>' +
-      '<div class="chart-note">기간 누적 변화는 cohort마다 자신의 첫 표시 관측을 0%로 재기준화한다. 시작일이 다른 cohort의 절대 지수 수준을 비교하는 그래프가 아니다.</div>' +
+      '<div class="chart-note">기간 누적 등락은 각 선수군의 표시 구간 첫 값을 0%로 맞춘 비교용 값이다. 절대 가격 수준을 비교하는 그래프가 아니다.</div>' +
     '</section>' +
     '<section class="grid2">' +
-      '<div class="panel"><div class="toolbar"><div><h2 style="margin:0 0 4px">사건 이후 무엇이 달랐나</h2>' +
-      '<p>상대강도는 SAMPLE_MARKET 대비 차이다. 후속 데이터가 부족하면 영향 해석을 보류한다.</p></div>' +
+      '<div class="panel"><div class="toolbar"><div><h2 style="margin:0 0 4px">이벤트 전후 반응</h2>' +
+      '<p>이벤트 날짜를 기준으로 각 선수군이 시장 전체 표본보다 얼마나 더 오르거나 덜 올랐는지 본다. 후속 데이터가 부족하면 판단을 보류한다.</p></div>' +
       '<select id="event-select" style="width:390px"></select></div><div id="event-summary"></div>' +
       '<div id="replay-table" class="table-wrap"></div></div>' +
-      '<div class="panel"><h2>Shock: 비정상적으로 튄 날</h2>' +
-      '<p style="margin-bottom:10px">z는 평소 분포에서 얼마나 멀리 벗어났는지를 나타낸다. 가까운 등록 사건은 시간적 근접성만 표시한다.</p>' +
+      '<div class="panel"><h2>평소보다 크게 움직인 날</h2>' +
+      '<p style="margin-bottom:10px">이상도는 평소 변동폭에서 얼마나 멀리 벗어났는지 보여준다. 가까운 이벤트는 시간상 근접했다는 뜻이며 원인으로 확정하지 않는다.</p>' +
       '<div id="shock-table" class="table-wrap"></div></div>' +
     '</section>';
 
@@ -348,7 +413,7 @@ function renderCohortToggles() {
     '<label class="cohort-toggle"><input type="checkbox" data-id="' + esc(cohort.cohort_id) + '" ' +
     (enabledCohorts.has(cohort.cohort_id) ? 'checked' : '') + ' />' +
     '<span class="swatch" style="background:' + palette[index % palette.length] + '"></span>' +
-    esc(cohort.name) + '</label>'
+    esc(cohortName(cohort.cohort_id)) + '</label>'
   ).join('');
 
   host.querySelectorAll('input').forEach(input => input.addEventListener('change', event => {
@@ -436,7 +501,7 @@ function renderChart() {
     const yy = y(value);
     html += '<line x1="' + left + '" y1="' + yy + '" x2="' + (width - right) + '" y2="' + yy + '" stroke="#232936" />' +
       '<text x="' + (left - 8) + '" y="' + (yy + 4) + '" text-anchor="end" fill="#737c90" font-size="11">' +
-      pct(value) + '</text>';
+      (chartMode === 'BREADTH' ? plainPct(value) : pct(value)) + '</text>';
   }
   if (min < 0 && max > 0) {
     const yy = y(0);
@@ -482,7 +547,7 @@ function renderChart() {
       const count = selected.filter(row => row.scope_id === cohort.cohort_id).length;
       return '<span class="legend-item ' + (count < 2 ? 'muted' : '') + '">' +
         '<span class="swatch" style="background:' + palette[cohortIndex % palette.length] + '"></span>' +
-        esc(cohort.name) + (count < 2 ? ' · 데이터 부족' : '') + '</span>';
+        esc(cohortName(cohort.cohort_id)) + (count < 2 ? ' · 데이터 부족' : '') + '</span>';
     }).join('');
   chips.innerHTML = visibleEvents
     .map(event => '<span class="event-chip">' + esc(event.anchor_date.slice(5) + ' · ' + event.title) + '</span>')
@@ -490,9 +555,9 @@ function renderChart() {
 }
 
 function maturityLabel(maturity) {
-  if (maturity === 'MATURE') return ['D+7 관측 완료', 'mature'];
-  if (maturity === 'PARTIAL') return ['D+3까지 관측', 'partial'];
-  if (maturity === 'EARLY') return ['D+1까지만 관측', 'partial'];
+  if (maturity === 'MATURE') return ['이벤트 7일 후까지 관측', 'mature'];
+  if (maturity === 'PARTIAL') return ['이벤트 3일 후까지 관측', 'partial'];
+  if (maturity === 'EARLY') return ['이벤트 1일 후까지 관측', 'partial'];
   return ['후속 관측 부족 · 판단 보류', 'pending'];
 }
 
@@ -506,7 +571,7 @@ function renderEventControls() {
 
   select.innerHTML = indexed.slice().reverse().map(item =>
     '<option value="' + item.index + '">' +
-    esc(item.event.anchor_date + ' · ' + item.event.title + ' · ' + item.event.anchor_type) +
+    esc(item.event.anchor_date + ' · ' + item.event.title + ' · ' + anchorLabel(item.event.anchor_type)) +
     '</option>'
   ).join('');
 
@@ -523,7 +588,7 @@ function renderEvent() {
 
   if (!event) {
     summaryHost.innerHTML = '';
-    tableHost.innerHTML = '<div class="muted">Replay event가 없습니다.</div>';
+    tableHost.innerHTML = '<div class="muted">등록된 이벤트가 없다.</div>';
     return;
   }
 
@@ -531,18 +596,22 @@ function renderEvent() {
   const label = maturityLabel(insight.maturity);
   const basis = insight.latestOffset == null
     ? '—'
-    : 'D' + (insight.latestOffset === 0 ? '' : insight.latestOffset > 0 ? '+' + insight.latestOffset : insight.latestOffset);
+    : insight.latestOffset === 0
+      ? '이벤트 당일'
+      : insight.latestOffset > 0
+        ? '이벤트 ' + insight.latestOffset + '일 후'
+        : '이벤트 ' + Math.abs(insight.latestOffset) + '일 전';
 
   summaryHost.innerHTML =
     '<div class="event-summary">' +
-      '<div class="mini"><div class="label">관측 상태</div><div class="value"><span class="badge ' +
+      '<div class="mini"><div class="label">후속 관측</div><div class="value"><span class="badge ' +
         label[1] + '">' + esc(label[0]) + '</span></div></div>' +
-      '<div class="mini"><div class="label">비교 기준</div><div class="value">' + esc(basis) + '</div></div>' +
-      '<div class="mini"><div class="label">시장보다 강한 cohort</div><div class="value ' +
+      '<div class="mini"><div class="label">현재 비교 시점</div><div class="value">' + esc(basis) + '</div></div>' +
+      '<div class="mini"><div class="label">시장보다 더 오르거나 덜 내린 선수군</div><div class="value ' +
         signedClass(insight.strongest?.change) + '">' +
         (insight.strongest ? esc(insight.strongest.name + ' ' + pct(insight.strongest.change)) : '—') +
       '</div></div>' +
-      '<div class="mini"><div class="label">시장보다 약한 cohort</div><div class="value ' +
+      '<div class="mini"><div class="label">시장보다 덜 오르거나 더 내린 선수군</div><div class="value ' +
         signedClass(insight.weakest?.change) + '">' +
         (insight.weakest ? esc(insight.weakest.name + ' ' + pct(insight.weakest.change)) : '—') +
       '</div></div>' +
@@ -555,17 +624,17 @@ function renderEvent() {
   );
   const offsets = insight.offsets.filter(offset => [-7, -3, -1, 0, 1, 3, 7].includes(offset));
   if (!offsets.length) {
-    tableHost.innerHTML = '<div class="muted">비교 가능한 상대강도 결과가 없습니다.</div>';
+    tableHost.innerHTML = '<div class="muted">시장 전체 표본과 비교할 수 있는 결과가 없다.</div>';
     return;
   }
 
   const scopes = [...new Set(rows.map(row => row.scope_id))]
-    .filter(scopeId => cohortName(scopeId) !== 'SAMPLE_MARKET');
+    .filter(scopeId => payload.cohorts.find(cohort => cohort.cohort_id === scopeId)?.name !== 'SAMPLE_MARKET');
   const map = new Map(rows.map(row => [row.scope_id + '|' + row.offset_days, row]));
 
   tableHost.innerHTML =
-    '<table><thead><tr><th>Cohort</th>' +
-      offsets.map(offset => '<th>D' + (offset === 0 ? '' : offset > 0 ? '+' + offset : offset) + '</th>').join('') +
+    '<table><thead><tr><th>선수군</th>' +
+      offsets.map(offset => '<th>' + (offset === 0 ? '당일' : offset > 0 ? offset + '일 후' : Math.abs(offset) + '일 전') + '</th>').join('') +
     '</tr></thead><tbody>' +
       scopes.map(scopeId =>
         '<tr><td>' + esc(cohortName(scopeId)) + '</td>' +
@@ -583,12 +652,12 @@ function renderEvent() {
 function renderShocks() {
   const host = document.querySelector('#shock-table');
   if (!payload.shocks.length) {
-    host.innerHTML = '<div class="muted">검출된 Shock candidate가 없습니다.</div>';
+    host.innerHTML = '<div class="muted">감지된 급변 날짜가 없다.</div>';
     return;
   }
 
   host.innerHTML =
-    '<table><thead><tr><th>Date / Cohort</th><th>Return</th><th>z</th></tr></thead><tbody>' +
+    '<table><thead><tr><th>날짜 / 선수군</th><th>가격 변동</th><th>이상도</th></tr></thead><tbody>' +
     payload.shocks.map(shock => {
       const context = shockContext(shock);
       let note = '등록된 사건과 ±3일 내 근접 없음';

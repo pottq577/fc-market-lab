@@ -131,12 +131,15 @@ test("loads published benchmark viewer data with reliability metadata", () => {
   }
 });
 
-test("benchmark page explains unstable diagnostic state and has valid inline JavaScript", () => {
+test("benchmark page explains reliability in plain language and has valid inline JavaScript", () => {
   const html = benchmarkViewerPage();
-  assert.match(html, /그래서 지금 이 benchmark를 어떻게 봐야 하나/);
-  assert.match(html, /진단용/);
-  assert.match(html, /FIXED_PANEL_BACKCAST/);
-  assert.match(html, /return aggregation/);
+  assert.match(html, /시장 대표지표/);
+  assert.match(html, /대표값 확정 전/);
+  assert.match(html, /현재 표본으로 과거 재계산/);
+  assert.match(html, /시장 규모 가중 중앙값/);
+  assert.match(html, /표본을 더 늘려도 같은 결론이 나오는가/);
+  assert.doesNotMatch(html, /Nested panel convergence/);
+  assert.doesNotMatch(html, /return aggregation/);
   const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
   assert.ok(script);
   assert.doesNotThrow(() => new Function(script));
