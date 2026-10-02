@@ -58,6 +58,7 @@ function fixture(): DatabaseSync {
       benchmark_uncertainty_run_id TEXT NOT NULL,
       benchmark_metric_run_id TEXT NOT NULL,
       panel_family_id TEXT NOT NULL,
+      convergence_version TEXT NOT NULL,
       benchmark_status TEXT NOT NULL,
       selected_panel_id TEXT,
       input_hash TEXT NOT NULL,
@@ -67,6 +68,7 @@ function fixture(): DatabaseSync {
     ) STRICT;
     CREATE TABLE benchmark_metric_run (
       benchmark_metric_run_id TEXT PRIMARY KEY,
+      metric_version TEXT NOT NULL,
       analysis_cutoff TEXT NOT NULL,
       input_hash TEXT NOT NULL,
       result_hash TEXT NOT NULL,
@@ -108,8 +110,8 @@ function fixture(): DatabaseSync {
       source_snapshot_id TEXT NOT NULL
     ) STRICT;
   `);
-  db.prepare("INSERT INTO benchmark_convergence_run VALUES ('conv','unc','metric','family','UNSTABLE',NULL,'sha256:conv-input','sha256:conv-result','SUCCEEDED','2026-10-02T02:10:00.000Z')").run();
-  db.prepare("INSERT INTO benchmark_metric_run VALUES ('metric','2026-10-02T02:00:00.000Z','sha256:metric-input','sha256:metric-result','SUCCEEDED')").run();
+  db.prepare("INSERT INTO benchmark_convergence_run VALUES ('conv','unc','metric','family','market-benchmark-convergence-v1','UNSTABLE',NULL,'sha256:conv-input','sha256:conv-result','SUCCEEDED','2026-10-02T02:10:00.000Z')").run();
+  db.prepare("INSERT INTO benchmark_metric_run VALUES ('metric','market-benchmark-metrics-v1','2026-10-02T02:00:00.000Z','sha256:metric-input','sha256:metric-result','SUCCEEDED')").run();
   db.prepare("INSERT INTO benchmark_panel_family VALUES ('family','universe','panel-v1','seed','2026-10-02T00:00:00.000Z')").run();
   db.prepare("INSERT INTO market_universe_snapshot VALUES ('universe','sha256:universe')").run();
   db.prepare("INSERT INTO benchmark_panel VALUES ('p100','family','P100',100)").run();
@@ -166,6 +168,38 @@ test("publishes a deterministic benchmark dataset and analysis run", () => {
       Number((db.prepare("SELECT COUNT(*) AS count FROM dataset_snapshot_price_point").get() as {count:number|bigint}).count),
       1,
     );
+  } finally {
+    db.close();
+  }
+});
+
+
+test("publishes benchmark v2 only for stable weighted-mean P300 convergence", () => {
+  const db = fixture();
+  try {
+    db.prepare("INSERT INTO benchmark_panel VALUES ('p300','family','P300',300)").run();
+    db.prepare("INSERT INTO benchmark_panel_member VALUES ('p300','a','a:1','P00_50',1,1)").run();
+    db.prepare(
+      "UPDATE benchmark_convergence_run SET convergence_version = ?, benchmark_status = 'STABLE', selected_panel_id = 'p300' WHERE benchmark_convergence_run_id = 'conv'",
+    ).run("market-benchmark-convergence-v2-weighted-mean");
+    db.prepare(
+      "UPDATE benchmark_metric_run SET metric_version = 'market-benchmark-metrics-v2' WHERE benchmark_metric_run_id = 'metric'",
+    ).run();
+
+    const result = publishBenchmarkRun(db, {
+      benchmarkConvergenceRunId: "conv",
+      codeCommit: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      schemaVersion: 19,
+      analysisVersion: "market-benchmark-v2",
+      catalogId: "MARKET_BENCHMARK_V2",
+      createdAt: "2026-10-02T06:00:00.000Z",
+    });
+    assert.equal(result.analysis_version, "market-benchmark-v2");
+    assert.equal(result.catalog_id, "MARKET_BENCHMARK_V2");
+    assert.equal(result.benchmark_status, "STABLE");
+    assert.equal(result.display_panel_id, "p300");
+    assert.equal(result.display_panel_size, 300);
+    assert.equal(result.display_role, "SELECTED_PRODUCTION");
   } finally {
     db.close();
   }

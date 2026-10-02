@@ -126,6 +126,8 @@ function render(data) {
       '<div class="mini"><div class="label">가격 관측 가능 모집단</div><strong>'+data.price_eligible_player_count+'명</strong><div class="sub">universe as-of '+esc(data.universe_as_of)+'</div></div>'+
       '<div class="mini"><div class="label">panel version</div><strong>'+esc(data.panel_version)+'</strong><div class="sub">effective from '+esc(data.effective_from)+'</div></div>'+
       '<div class="mini"><div class="label">latest metric</div><strong>'+esc(data.latest_metric_date ?? '—')+'</strong><div class="sub">'+esc(period)+' · '+(data.published?'published':'not published')+'</div></div>'+
+      '<div class="mini"><div class="label">analysis / metric</div><strong>'+esc(data.analysis_version ?? 'unpublished')+'</strong><div class="sub">'+esc(data.metric_version)+'</div></div>'+
+      '<div class="mini"><div class="label">return aggregation</div><strong>'+esc(data.return_aggregation)+'</strong><div class="sub">player population weight</div></div>'+
     '</div></section>'+
     '<section class="panel"><h2>Nested panel convergence</h2><p>PASS가 아닌 pair가 있으면 대표 패널을 확정하지 않는다.</p><div style="overflow:auto;margin-top:10px"><table><thead><tr><th>pair</th><th>status</th><th>valid days</th><th>direction days</th><th>return median Δ</th><th>return P95 Δ</th><th>direction match</th><th>breadth median Δ</th><th>reason</th></tr></thead><tbody>'+pairRows(data)+'</tbody></table></div></section>';
 }

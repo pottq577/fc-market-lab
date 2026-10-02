@@ -35,6 +35,7 @@ function fixture(): DatabaseSync {
     ) STRICT;
     CREATE TABLE benchmark_metric_run (
       benchmark_metric_run_id TEXT PRIMARY KEY,
+      metric_version TEXT NOT NULL,
       analysis_cutoff TEXT NOT NULL
     ) STRICT;
     CREATE TABLE benchmark_panel_family (
@@ -97,7 +98,7 @@ function fixture(): DatabaseSync {
   db.prepare("INSERT INTO dataset_snapshot_benchmark VALUES ('ds','conv','p800','DIAGNOSTIC_LARGEST','2026-10-02T03:00:00Z')").run();
   db.prepare("INSERT INTO analysis_run VALUES ('run','ds','market-benchmark-v1','2026-10-02T03:00:00Z','SUCCEEDED')").run();
   db.prepare("INSERT INTO benchmark_convergence_run VALUES ('conv','unc','metric','family','market-benchmark-convergence-v1','UNSTABLE',NULL,'SUCCEEDED','2026-10-02T02:30:00Z')").run();
-  db.prepare("INSERT INTO benchmark_metric_run VALUES ('metric','2026-10-02T02:00:00Z')").run();
+  db.prepare("INSERT INTO benchmark_metric_run VALUES ('metric','market-benchmark-metrics-v1','2026-10-02T02:00:00Z')").run();
   db.prepare("INSERT INTO benchmark_panel_family VALUES ('family','universe','panel-v2','2026-10-02T00:00:00Z')").run();
   db.prepare("INSERT INTO market_universe_snapshot VALUES ('universe','2026-10-02T00:00:00Z',1200)").run();
   db.prepare("INSERT INTO benchmark_panel VALUES ('p400','family','P400',400)").run();
@@ -115,6 +116,9 @@ test("loads published benchmark viewer data with reliability metadata", () => {
   try {
     const payload = loadBenchmarkViewerPayload(db, "run");
     assert.ok(payload);
+    assert.equal(payload.analysis_version, "market-benchmark-v1");
+    assert.equal(payload.metric_version, "market-benchmark-metrics-v1");
+    assert.equal(payload.return_aggregation, "WEIGHTED_MEDIAN_PLAYER_RETURN");
     assert.equal(payload.benchmark_status, "UNSTABLE");
     assert.equal(payload.display_panel_label, "P800");
     assert.equal(payload.display_role, "DIAGNOSTIC_LARGEST");
@@ -132,6 +136,7 @@ test("benchmark page explains unstable diagnostic state and has valid inline Jav
   assert.match(html, /그래서 지금 이 benchmark를 어떻게 봐야 하나/);
   assert.match(html, /진단용/);
   assert.match(html, /FIXED_PANEL_BACKCAST/);
+  assert.match(html, /return aggregation/);
   const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
   assert.ok(script);
   assert.doesNotThrow(() => new Function(script));

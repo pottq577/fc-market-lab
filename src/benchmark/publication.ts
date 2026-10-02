@@ -3,12 +3,19 @@ import type { DatabaseSync } from "node:sqlite";
 
 export const BENCHMARK_ANALYSIS_VERSION = "market-benchmark-v1";
 export const BENCHMARK_DATASET_CATALOG_ID = "MARKET_BENCHMARK_V1";
+export const BENCHMARK_ANALYSIS_V2_VERSION = "market-benchmark-v2";
+export const BENCHMARK_DATASET_V2_CATALOG_ID = "MARKET_BENCHMARK_V2";
+export const BENCHMARK_V2_CONVERGENCE_VERSION =
+  "market-benchmark-convergence-v2-weighted-mean";
+export const BENCHMARK_V2_METRIC_VERSION = "market-benchmark-metrics-v2";
+export const BENCHMARK_V2_SELECTED_PANEL_SIZE = 300;
 
 interface ConvergenceRunRow {
   benchmark_convergence_run_id: string;
   benchmark_uncertainty_run_id: string;
   benchmark_metric_run_id: string;
   panel_family_id: string;
+  convergence_version: string;
   benchmark_status: "STABLE" | "UNSTABLE";
   selected_panel_id: string | null;
   input_hash: string;
@@ -17,6 +24,7 @@ interface ConvergenceRunRow {
 
 interface MetricRunRow {
   benchmark_metric_run_id: string;
+  metric_version: string;
   analysis_cutoff: string;
   input_hash: string;
   result_hash: string;
@@ -50,6 +58,8 @@ interface FrozenPriceRow {
 export interface PublishBenchmarkResult {
   dataset_snapshot_id: string;
   analysis_run_id: string;
+  analysis_version: string;
+  catalog_id: string;
   benchmark_convergence_run_id: string;
   benchmark_metric_run_id: string;
   panel_family_id: string;
@@ -119,33 +129,57 @@ function normalizeCommit(value: string): string {
 export function resolveBenchmarkConvergenceRunId(
   db: DatabaseSync,
   requested?: string,
+  convergenceVersion?: string,
 ): string {
   if (requested !== undefined) {
     const value = requested.trim();
     if (value === "") throw new TypeError("benchmarkConvergenceRunId must not be empty");
     const found = db.prepare(
-      `SELECT benchmark_convergence_run_id
+      `SELECT benchmark_convergence_run_id, convergence_version
        FROM benchmark_convergence_run
        WHERE benchmark_convergence_run_id = ? AND status = 'SUCCEEDED'`,
-    ).get(value) as { benchmark_convergence_run_id: string } | undefined;
+    ).get(value) as {
+      benchmark_convergence_run_id: string;
+      convergence_version: string;
+    } | undefined;
     if (!found) throw new TypeError(`unknown benchmark convergence run: ${value}`);
+    if (convergenceVersion !== undefined && found.convergence_version !== convergenceVersion) {
+      throw new TypeError(
+        `benchmark convergence run ${value} is ${found.convergence_version}, expected ${convergenceVersion}`,
+      );
+    }
     return found.benchmark_convergence_run_id;
   }
-  const latest = db.prepare(
-    `SELECT benchmark_convergence_run_id
-     FROM benchmark_convergence_run
-     WHERE status = 'SUCCEEDED'
-     ORDER BY created_at DESC, benchmark_convergence_run_id DESC
-     LIMIT 1`,
-  ).get() as { benchmark_convergence_run_id: string } | undefined;
-  if (!latest) throw new TypeError("no successful benchmark convergence run exists");
-  return latest.benchmark_convergence_run_id;
+  const latest = convergenceVersion === undefined
+    ? db.prepare(
+        `SELECT benchmark_convergence_run_id
+         FROM benchmark_convergence_run
+         WHERE status = 'SUCCEEDED'
+         ORDER BY created_at DESC, benchmark_convergence_run_id DESC
+         LIMIT 1`,
+      ).get()
+    : db.prepare(
+        `SELECT benchmark_convergence_run_id
+         FROM benchmark_convergence_run
+         WHERE status = 'SUCCEEDED' AND convergence_version = ?
+         ORDER BY created_at DESC, benchmark_convergence_run_id DESC
+         LIMIT 1`,
+      ).get(convergenceVersion);
+  const resolved = latest as { benchmark_convergence_run_id: string } | undefined;
+  if (!resolved) {
+    throw new TypeError(
+      convergenceVersion === undefined
+        ? "no successful benchmark convergence run exists"
+        : `no successful benchmark convergence run exists for ${convergenceVersion}`,
+    );
+  }
+  return resolved.benchmark_convergence_run_id;
 }
 
 function convergenceRun(db: DatabaseSync, runId: string): ConvergenceRunRow {
   const row = db.prepare(
     `SELECT benchmark_convergence_run_id, benchmark_uncertainty_run_id,
-            benchmark_metric_run_id, panel_family_id, benchmark_status,
+            benchmark_metric_run_id, panel_family_id, convergence_version, benchmark_status,
             selected_panel_id, input_hash, result_hash
      FROM benchmark_convergence_run
      WHERE benchmark_convergence_run_id = ? AND status = 'SUCCEEDED'`,
@@ -156,7 +190,8 @@ function convergenceRun(db: DatabaseSync, runId: string): ConvergenceRunRow {
 
 function metricRun(db: DatabaseSync, runId: string): MetricRunRow {
   const row = db.prepare(
-    `SELECT benchmark_metric_run_id, analysis_cutoff, input_hash, result_hash
+    `SELECT benchmark_metric_run_id, metric_version, analysis_cutoff,
+            input_hash, result_hash
      FROM benchmark_metric_run
      WHERE benchmark_metric_run_id = ? AND status = 'SUCCEEDED'`,
   ).get(runId) as MetricRunRow | undefined;
@@ -217,6 +252,8 @@ export function publishBenchmarkRun(
     benchmarkConvergenceRunId: string;
     codeCommit: string;
     schemaVersion: number;
+    analysisVersion?: string;
+    catalogId?: string;
     createdAt?: string;
   },
 ): PublishBenchmarkResult {
@@ -226,9 +263,41 @@ export function publishBenchmarkRun(
   const universeRow = universe(db, family.universe_snapshot_id);
   const display = displayPanel(db, convergence);
   const codeCommit = normalizeCommit(input.codeCommit);
+  const analysisVersion = input.analysisVersion ?? BENCHMARK_ANALYSIS_VERSION;
+  const catalogId = input.catalogId ?? (
+    analysisVersion === BENCHMARK_ANALYSIS_V2_VERSION
+      ? BENCHMARK_DATASET_V2_CATALOG_ID
+      : BENCHMARK_DATASET_CATALOG_ID
+  );
   const createdAt = normalizeTimestamp(input.createdAt ?? new Date().toISOString(), "createdAt");
   if (!Number.isSafeInteger(input.schemaVersion) || input.schemaVersion <= 0) {
     throw new TypeError("schemaVersion must be a positive safe integer");
+  }
+  if (![BENCHMARK_ANALYSIS_VERSION, BENCHMARK_ANALYSIS_V2_VERSION].includes(analysisVersion)) {
+    throw new TypeError(`unsupported benchmark analysis version: ${analysisVersion}`);
+  }
+  const expectedCatalogId = analysisVersion === BENCHMARK_ANALYSIS_V2_VERSION
+    ? BENCHMARK_DATASET_V2_CATALOG_ID
+    : BENCHMARK_DATASET_CATALOG_ID;
+  if (catalogId !== expectedCatalogId) {
+    throw new TypeError(`${analysisVersion} requires catalog ${expectedCatalogId}`);
+  }
+  if (analysisVersion === BENCHMARK_ANALYSIS_V2_VERSION) {
+    if (metric.metric_version !== BENCHMARK_V2_METRIC_VERSION) {
+      throw new TypeError(`benchmark v2 requires ${BENCHMARK_V2_METRIC_VERSION}`);
+    }
+    if (convergence.convergence_version !== BENCHMARK_V2_CONVERGENCE_VERSION) {
+      throw new TypeError(`benchmark v2 requires ${BENCHMARK_V2_CONVERGENCE_VERSION}`);
+    }
+    if (
+      convergence.benchmark_status !== "STABLE" ||
+      display.role !== "SELECTED_PRODUCTION" ||
+      Number(display.panel.panel_size) !== BENCHMARK_V2_SELECTED_PANEL_SIZE
+    ) {
+      throw new TypeError(
+        `benchmark v2 publication requires STABLE selected P${BENCHMARK_V2_SELECTED_PANEL_SIZE}`,
+      );
+    }
   }
 
   const frozenPrices = db.prepare(
@@ -280,9 +349,12 @@ export function publishBenchmarkRun(
   const manifest = {
     version: 1,
     schema_version: input.schemaVersion,
+    analysis_version: analysisVersion,
     analysis_cutoff: metric.analysis_cutoff,
-    catalog_id: BENCHMARK_DATASET_CATALOG_ID,
+    catalog_id: catalogId,
     catalog_hash: catalogHash,
+    metric_version: metric.metric_version,
+    convergence_version: convergence.convergence_version,
     benchmark_convergence_run_id: convergence.benchmark_convergence_run_id,
     benchmark_convergence_input_hash: convergence.input_hash,
     benchmark_convergence_result_hash: convergence.result_hash,
@@ -315,7 +387,7 @@ export function publishBenchmarkRun(
   const parameterHash = sha256(parametersJson);
   const analysisIdentity = canonicalJson({
     dataset_snapshot_id: datasetSnapshotId,
-    analysis_version: BENCHMARK_ANALYSIS_VERSION,
+    analysis_version: analysisVersion,
     parameter_hash: parameterHash,
     code_commit: codeCommit,
   });
@@ -330,7 +402,7 @@ export function publishBenchmarkRun(
       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       datasetSnapshotId,
-      BENCHMARK_DATASET_CATALOG_ID,
+      catalogId,
       metric.analysis_cutoff,
       createdAt,
       input.schemaVersion,
@@ -348,7 +420,7 @@ export function publishBenchmarkRun(
       input_hash: string;
     };
     if (
-      snapshot.catalog_id !== BENCHMARK_DATASET_CATALOG_ID ||
+      snapshot.catalog_id !== catalogId ||
       snapshot.analysis_cutoff !== metric.analysis_cutoff ||
       Number(snapshot.schema_version) !== input.schemaVersion ||
       snapshot.catalog_hash !== catalogHash ||
@@ -393,7 +465,7 @@ export function publishBenchmarkRun(
     ).run(
       analysisRunId,
       datasetSnapshotId,
-      BENCHMARK_ANALYSIS_VERSION,
+      analysisVersion,
       parametersJson,
       parameterHash,
       codeCommit,
@@ -414,7 +486,7 @@ export function publishBenchmarkRun(
     };
     if (
       run.dataset_snapshot_id !== datasetSnapshotId ||
-      run.analysis_version !== BENCHMARK_ANALYSIS_VERSION ||
+      run.analysis_version !== analysisVersion ||
       run.parameter_hash !== parameterHash ||
       run.code_commit !== codeCommit ||
       run.status !== "SUCCEEDED" ||
@@ -484,6 +556,8 @@ export function publishBenchmarkRun(
     return {
       dataset_snapshot_id: datasetSnapshotId,
       analysis_run_id: analysisRunId,
+      analysis_version: analysisVersion,
+      catalog_id: catalogId,
       benchmark_convergence_run_id: convergence.benchmark_convergence_run_id,
       benchmark_metric_run_id: metric.benchmark_metric_run_id,
       panel_family_id: family.panel_family_id,

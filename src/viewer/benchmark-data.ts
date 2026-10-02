@@ -1,5 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 
+import { benchmarkReturnAggregation } from "../benchmark/metrics.ts";
+
 export type ViewerBenchmarkMetricName = "RETURN_1D" | "INDEX" | "BREADTH" | "IQR" | "MAD";
 
 export interface ViewerBenchmarkMetric {
@@ -37,6 +39,7 @@ export interface ViewerConvergencePair {
 export interface ViewerBenchmarkPayload {
   published: boolean;
   analysis_run_id: string | null;
+  analysis_version: string | null;
   dataset_snapshot_id: string | null;
   benchmark_convergence_run_id: string;
   benchmark_uncertainty_run_id: string;
@@ -54,6 +57,8 @@ export interface ViewerBenchmarkPayload {
   universe_as_of: string;
   price_eligible_player_count: number;
   analysis_cutoff: string;
+  metric_version: string;
+  return_aggregation: string;
   latest_metric_date: string | null;
   latest_metrics: ViewerBenchmarkMetric[];
   convergence_pairs: ViewerConvergencePair[];
@@ -85,6 +90,7 @@ export function loadBenchmarkViewerPayload(
   let publication: {
     dataset_snapshot_id: string;
     analysis_run_id: string;
+    analysis_version: string;
     benchmark_convergence_run_id: string;
     display_panel_id: string;
     display_role: "SELECTED_PRODUCTION" | "DIAGNOSTIC_LARGEST";
@@ -92,22 +98,22 @@ export function loadBenchmarkViewerPayload(
   if (tableExists(db, "dataset_snapshot_benchmark")) {
     if (requestedAnalysisRunId !== undefined) {
       publication = db.prepare(
-        `SELECT dsb.dataset_snapshot_id, ar.analysis_run_id,
+        `SELECT dsb.dataset_snapshot_id, ar.analysis_run_id, ar.analysis_version,
                 dsb.benchmark_convergence_run_id, dsb.display_panel_id, dsb.display_role
          FROM dataset_snapshot_benchmark dsb
          JOIN analysis_run ar ON ar.dataset_snapshot_id = dsb.dataset_snapshot_id
-         WHERE ar.analysis_run_id = ? AND ar.analysis_version = 'market-benchmark-v1'`,
+         WHERE ar.analysis_run_id = ? AND ar.analysis_version IN ('market-benchmark-v1', 'market-benchmark-v2')`,
       ).get(requestedAnalysisRunId) as typeof publication;
       if (!publication) {
         throw new TypeError(`benchmark analysis run ${requestedAnalysisRunId} is not published`);
       }
     } else {
       publication = db.prepare(
-        `SELECT dsb.dataset_snapshot_id, ar.analysis_run_id,
+        `SELECT dsb.dataset_snapshot_id, ar.analysis_run_id, ar.analysis_version,
                 dsb.benchmark_convergence_run_id, dsb.display_panel_id, dsb.display_role
          FROM dataset_snapshot_benchmark dsb
          JOIN analysis_run ar ON ar.dataset_snapshot_id = dsb.dataset_snapshot_id
-         WHERE ar.analysis_version = 'market-benchmark-v1' AND ar.status = 'SUCCEEDED'
+         WHERE ar.analysis_version IN ('market-benchmark-v1', 'market-benchmark-v2') AND ar.status = 'SUCCEEDED'
          ORDER BY ar.created_at DESC, ar.analysis_run_id DESC
          LIMIT 1`,
       ).get() as typeof publication;
@@ -145,10 +151,13 @@ export function loadBenchmarkViewerPayload(
   };
 
   const metricRun = db.prepare(
-    `SELECT analysis_cutoff
+    `SELECT analysis_cutoff, metric_version
      FROM benchmark_metric_run
      WHERE benchmark_metric_run_id = ?`,
-  ).get(run.benchmark_metric_run_id) as { analysis_cutoff: string } | undefined;
+  ).get(run.benchmark_metric_run_id) as {
+    analysis_cutoff: string;
+    metric_version: string;
+  } | undefined;
   const family = db.prepare(
     `SELECT universe_snapshot_id, panel_version, effective_from
      FROM benchmark_panel_family
@@ -274,6 +283,7 @@ export function loadBenchmarkViewerPayload(
   return {
     published: publication !== undefined,
     analysis_run_id: publication?.analysis_run_id ?? null,
+    analysis_version: publication?.analysis_version ?? null,
     dataset_snapshot_id: publication?.dataset_snapshot_id ?? null,
     benchmark_convergence_run_id: run.benchmark_convergence_run_id,
     benchmark_uncertainty_run_id: run.benchmark_uncertainty_run_id,
@@ -291,6 +301,8 @@ export function loadBenchmarkViewerPayload(
     universe_as_of: universe.as_of,
     price_eligible_player_count: Number(universe.price_eligible_player_count),
     analysis_cutoff: metricRun.analysis_cutoff,
+    metric_version: metricRun.metric_version,
+    return_aggregation: benchmarkReturnAggregation(metricRun.metric_version),
     latest_metric_date: latest?.metric_date ?? null,
     latest_metrics: metrics,
     convergence_pairs: pairs.map((row) => ({

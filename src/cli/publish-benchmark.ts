@@ -17,7 +17,7 @@ function readOption(args: string[], name: string): string | undefined {
 function cleanGitCommit(): string {
   const status = execFileSync("git", ["status", "--porcelain"], { encoding: "utf8" }).trim();
   if (status !== "") {
-    throw new Error("working tree is dirty; commit Stage 19 before publishing the benchmark");
+    throw new Error("working tree is dirty; commit benchmark changes before publishing");
   }
   return execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
 }
@@ -29,11 +29,18 @@ try {
   const benchmarkConvergenceRunId = resolveBenchmarkConvergenceRunId(
     db,
     readOption(args, "convergence-run"),
+    readOption(args, "convergence-version"),
   );
   const result = publishBenchmarkRun(db, {
     benchmarkConvergenceRunId,
     codeCommit: readOption(args, "commit") ?? cleanGitCommit(),
     schemaVersion: MARKET_SCHEMA_VERSION,
+    ...(readOption(args, "analysis-version") !== undefined
+      ? { analysisVersion: readOption(args, "analysis-version") }
+      : {}),
+    ...(readOption(args, "catalog-id") !== undefined
+      ? { catalogId: readOption(args, "catalog-id") }
+      : {}),
   });
   console.log(JSON.stringify({ status: "READY", db_path: dbPath, ...result }, null, 2));
 } finally {
