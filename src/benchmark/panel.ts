@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
-export const BENCHMARK_PANEL_VERSION = "market-benchmark-panel-v1";
+export const BENCHMARK_PANEL_VERSION = "market-benchmark-panel-v2";
 export const DEFAULT_BENCHMARK_PANEL_SEED = "market-benchmark-v1";
 export const DEFAULT_BENCHMARK_PANEL_SIZES = [100, 200, 400, 800] as const;
 
@@ -85,6 +85,7 @@ export interface BuildBenchmarkPanelResult {
   discovery_frame_id: string;
   universe_snapshot_id: string;
   panel_version: string;
+  stratification_basis: "PRICE_ONLY";
   sample_seed: string;
   effective_from: string;
   discovery_target_count: number;
@@ -92,8 +93,10 @@ export interface BuildBenchmarkPanelResult {
   discovery_response_coverage: number;
   eligible_responder_count: number;
   usage_observed_count: number;
+  usage_observation_coverage: number;
   usage_boundaries: { p33: number | null; p67: number | null };
   price_boundaries: { p50: number; p80: number; p95: number };
+  price_band_counts: Record<PriceBand, number>;
   stage1_inclusion_probability: number;
   stage1_population_weight: number;
   nonempty_stratum_count: number;
@@ -350,6 +353,7 @@ function prepareCandidates(
   priceBoundaries: { p50: number; p80: number; p95: number };
   usageBoundaries: { p33: number | null; p67: number | null };
   usageObservedCount: number;
+  priceBandCounts: Record<PriceBand, number>;
 } {
   const raw = rows.map((row) => ({
     sample_rank: safePositiveInteger(row.sample_rank, "sample_rank"),
@@ -379,10 +383,17 @@ function prepareCandidates(
         p67: nearestRank(usageValues, 2 / 3),
       };
 
+  const priceBandCounts: Record<PriceBand, number> = {
+    P00_50: 0,
+    P50_80: 0,
+    P80_95: 0,
+    P95_100: 0,
+  };
   const candidates: Candidate[] = raw.map((row) => {
     const uBand = usageBand(row.usage_value, usageBoundaries);
     const pBand = priceBand(row.price, priceBoundaries);
-    const stratumId = `${uBand}:${pBand}`;
+    priceBandCounts[pBand] += 1;
+    const stratumId = pBand;
     return {
       ...row,
       usage_band: uBand,
@@ -399,6 +410,7 @@ function prepareCandidates(
     priceBoundaries,
     usageBoundaries,
     usageObservedCount: usageValues.length,
+    priceBandCounts,
   };
 }
 
@@ -582,20 +594,22 @@ export function buildBenchmarkPanels(
       .prepare(
         `INSERT OR IGNORE INTO benchmark_panel_family(
           panel_family_id, discovery_frame_id, universe_snapshot_id,
-          panel_version, sample_seed, effective_from,
+          panel_version, stratification_basis, sample_seed, effective_from,
           discovery_target_count, discovery_observed_count,
           discovery_response_coverage, eligible_responder_count,
-          usage_observed_count, usage_p33, usage_p67,
-          price_p50, price_p80, price_p95,
+          usage_observed_count, usage_observation_coverage,
+          usage_p33, usage_p67,
+          price_p50, price_p80, price_p95, price_band_counts_json,
           stage1_inclusion_probability, stage1_population_weight,
           panel_sizes_json, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         panelFamilyId,
         discoveryFrameId,
         panelUniverse.universe_snapshot_id,
         panelVersion,
+        "PRICE_ONLY",
         sampleSeed,
         effectiveFrom,
         Number(frame.target_size),
@@ -603,11 +617,13 @@ export function buildBenchmarkPanels(
         input.discoveryStatus.response_coverage,
         prepared.candidates.length,
         prepared.usageObservedCount,
+        Number((prepared.usageObservedCount / prepared.candidates.length).toFixed(6)),
         prepared.usageBoundaries.p33,
         prepared.usageBoundaries.p67,
         prepared.priceBoundaries.p50,
         prepared.priceBoundaries.p80,
         prepared.priceBoundaries.p95,
+        JSON.stringify(prepared.priceBandCounts),
         stage1Probability,
         stage1Weight,
         JSON.stringify(panelSizes),
@@ -684,12 +700,11 @@ export function buildBenchmarkPanels(
         const combined = stage1Probability * stage2;
         const weight = 1 / combined;
         weights.set(stratumId, { stage2, combined, weight });
-        const [uBand, pBand] = stratumId.split(":") as [UsageBand, PriceBand];
         insertStratum.run(
           panelId,
           stratumId,
-          uBand,
-          pBand,
+          null,
+          stratumId as PriceBand,
           responderCount,
           sampledCount,
           roundProbability(stage2),
@@ -754,6 +769,7 @@ export function buildBenchmarkPanels(
       discovery_frame_id: discoveryFrameId,
       universe_snapshot_id: panelUniverse.universe_snapshot_id,
       panel_version: panelVersion,
+      stratification_basis: "PRICE_ONLY",
       sample_seed: sampleSeed,
       effective_from: effectiveFrom,
       discovery_target_count: Number(frame.target_size),
@@ -761,8 +777,10 @@ export function buildBenchmarkPanels(
       discovery_response_coverage: input.discoveryStatus.response_coverage,
       eligible_responder_count: prepared.candidates.length,
       usage_observed_count: prepared.usageObservedCount,
+      usage_observation_coverage: Number((prepared.usageObservedCount / prepared.candidates.length).toFixed(6)),
       usage_boundaries: prepared.usageBoundaries,
       price_boundaries: prepared.priceBoundaries,
+      price_band_counts: prepared.priceBandCounts,
       stage1_inclusion_probability: stage1Probability,
       stage1_population_weight: stage1Weight,
       nonempty_stratum_count: nonemptyStrata.size,
