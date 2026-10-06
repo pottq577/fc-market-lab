@@ -53,11 +53,21 @@ export function insightViewerPage(): string {
     .cohorts { display: flex; flex-wrap: wrap; gap: 6px; }
     .cohort-toggle { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #303646; background: #181c25; border-radius: 999px; padding: 6px 9px; color: #c8cede; font-size: 12px; cursor: pointer; }
     .cohort-toggle input { margin: 0; }
-    #chart { width: 100%; height: 390px; display: block; }
+    #chart-wrap { position: relative; }
+    #chart { width: 100%; height: 390px; display: block; cursor: crosshair; touch-action: none; }
+    .chart-tooltip { position: absolute; z-index: 3; min-width: 220px; max-width: 320px; padding: 10px 11px; border: 1px solid #343b4b; border-radius: 9px; background: rgba(18, 22, 30, .96); box-shadow: 0 8px 24px rgba(0, 0, 0, .28); pointer-events: none; font-size: 11px; line-height: 1.45; }
+    .chart-tooltip[hidden] { display: none; }
+    .tooltip-date { margin-bottom: 7px; color: #edf0f7; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .tooltip-event { margin: 0 0 7px; padding: 7px 8px; border-radius: 7px; background: #171c26; color: #c7cfdd; }
+    .tooltip-event-meta { color: #7f899c; }
+    .tooltip-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 4px; color: #b8c0cf; }
+    .tooltip-series { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+    .tooltip-value { color: #edf0f7; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .legend, .event-chips { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 9px; font-size: 12px; color: #b7bdcc; }
     .legend-item, .event-chip { display: inline-flex; align-items: center; gap: 6px; }
     .swatch { width: 16px; height: 3px; border-radius: 2px; }
-    .event-chip { border: 1px solid #293142; border-radius: 999px; padding: 4px 7px; color: #8f99ad; }
+    .event-chip { border: 1px solid #293142; border-radius: 999px; padding: 4px 7px; color: #8f99ad; outline: none; cursor: default; }
+    .event-chip:focus-visible { border-color: #7aa2f7; color: #c8d6f3; }
     .chart-note { margin-top: 8px; color: #747e91; font-size: 11px; }
     .grid2 { display: grid; grid-template-columns: minmax(0, 2fr) minmax(360px, 1fr); gap: 14px; }
     .event-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
@@ -100,7 +110,6 @@ export function insightViewerPage(): string {
       <nav class="nav" aria-label="화면 이동">
         <a class="active" href="/">시장 인사이트</a>
         <a href="/benchmark">시장 대표지표</a>
-        <a href="/?legacy=1">고급 지표</a>
       </nav>
       <div class="run-picker">
         <div class="label" style="margin-bottom:6px">선수 그룹 분석 기준</div>
@@ -144,6 +153,46 @@ function plainPct(value) {
   if (value == null || Number.isNaN(Number(value))) return '—';
   return (Number(value) * 100).toFixed(2) + '%';
 }
+function axisPct(value) {
+  if (value == null || Number.isNaN(Number(value))) return '—';
+  const n = Number(value) * 100;
+  if (Math.abs(n) < 1e-10) return '0%';
+  const abs = Math.abs(n);
+  const digits = abs >= 100 ? 0 : abs >= 10 ? 1 : 2;
+  return (n > 0 ? '+' : '') + n.toLocaleString('ko-KR', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits
+  }) + '%';
+}
+function niceChartStep(range) {
+  const rough = range / 5;
+  if (!Number.isFinite(rough) || rough <= 0) return .01;
+  const magnitude = 10 ** Math.floor(Math.log10(rough));
+  const fraction = rough / magnitude;
+  const niceFraction = fraction < 1.5 ? 1 : fraction < 3 ? 2 : fraction < 7 ? 5 : 10;
+  return niceFraction * magnitude;
+}
+function niceChartScale(values, includeZero = true) {
+  let min = Math.min(...values);
+  let max = Math.max(...values);
+  if (includeZero) {
+    min = Math.min(min, 0);
+    max = Math.max(max, 0);
+  }
+  if (min === max) {
+    const delta = Math.max(Math.abs(min) * .05, .01);
+    min -= delta;
+    max += delta;
+  }
+  const step = niceChartStep(max - min);
+  const niceMin = Math.floor(min / step) * step;
+  const niceMax = Math.ceil(max / step) * step;
+  const count = Math.max(1, Math.round((niceMax - niceMin) / step));
+  const ticks = Array.from({ length: count + 1 }, (_, index) =>
+    Number((niceMax - step * index).toPrecision(12))
+  );
+  return { min: niceMin, max: niceMax, ticks };
+}
 function signedClass(value) {
   return Number(value) > 0 ? 'positive' : Number(value) < 0 ? 'negative' : '';
 }
@@ -168,24 +217,24 @@ function card(label, value, signedValue = null, sub = '') {
     (signedValue == null ? '' : signedClass(signedValue)) + '">' + esc(value) + '</div>' +
     (sub ? '<div class="subvalue">' + esc(sub) + '</div>' : '') + '</div>';
 }
-function indexRows(scopeId) {
+function returnRows(scopeId) {
   return payload.metrics
-    .filter(m => m.scope_id === scopeId && m.metric_name === 'INDEX' && m.status === 'OK' && m.value != null)
+    .filter(m => m.scope_id === scopeId && m.metric_name === 'RETURN_1D' && m.status === 'OK' && m.value != null)
     .sort((a, b) => a.metric_date.localeCompare(b.metric_date));
 }
 function latestDate() {
   const sample = sampleCohort();
-  return sample ? indexRows(sample.cohort_id).at(-1)?.metric_date ?? null : null;
+  return sample ? returnRows(sample.cohort_id).at(-1)?.metric_date ?? null : null;
 }
 function changeOver(scopeId, days) {
   const latest = latestDate();
   if (!latest) return null;
-  const rows = indexRows(scopeId).filter(r => r.metric_date <= latest);
-  const end = rows.at(-1);
   const target = dateMinus(latest, days);
-  const start = rows.filter(r => r.metric_date <= target).at(-1);
-  if (!start || !end || start.value == null || end.value == null || Number(start.value) === 0) return null;
-  return Number(end.value) / Number(start.value) - 1;
+  const rows = returnRows(scopeId).filter(r => r.metric_date > target && r.metric_date <= latest);
+  if (rows.length !== days) return null;
+  const targetDay = dayNumber(target);
+  if (rows.some((row, index) => dayNumber(row.metric_date) !== targetDay + index + 1)) return null;
+  return rows.reduce((factor, row) => factor * (1 + Number(row.value)), 1) - 1;
 }
 function marketReady() {
   return benchmark?.published === true &&
@@ -249,7 +298,7 @@ function historyCount(scopeId, days) {
   const latest = latestDate();
   if (!latest) return 0;
   const cutoff = dateMinus(latest, days);
-  return indexRows(scopeId).filter(r => r.metric_date >= cutoff && r.metric_date <= latest).length;
+  return returnRows(scopeId).filter(r => r.metric_date >= cutoff && r.metric_date <= latest).length;
 }
 function eventInsight(event) {
   const rows = payload.replay.filter(r =>
@@ -392,9 +441,10 @@ function render() {
       '<select id="window-select" class="window-select">' +
         '<option value="30">30일</option><option value="90" selected>90일</option><option value="0">전체</option>' +
       '</select></div><div id="cohort-toggles" class="cohorts"></div></div>' +
-      '<svg id="chart" viewBox="0 0 1200 390" preserveAspectRatio="none"></svg>' +
+      '<div id="chart-wrap"><svg id="chart" viewBox="0 0 1200 390" preserveAspectRatio="none"></svg>' +
+      '<div id="chart-tooltip" class="chart-tooltip" hidden></div></div>' +
       '<div id="legend" class="legend"></div><div id="event-chips" class="event-chips"></div>' +
-      '<div class="chart-note">기간 누적 등락은 각 그룹의 시작점을 0%로 맞춘 비교값이에요.</div>' +
+      '<div class="chart-note">기간 누적 등락은 표시 구간의 첫 유효 날짜를 0%로 맞추고 하루 등락률을 이어 계산해요. 데이터가 끊기면 새 구간을 0%에서 다시 시작해요.</div>' +
     '</section>' +
     '<section class="panel"><h2>평소보다 크게 움직인 날</h2>' +
       '<p style="margin-bottom:10px">평소보다 가격이 크게 움직인 날짜만 모았어요. 근처 이벤트는 함께 보여주지만 원인이라고 단정하지 않아요.</p>' +
@@ -441,16 +491,29 @@ function chartRows() {
     const rows = [];
     payload.cohorts.forEach(cohort => {
       if (!enabledCohorts.has(cohort.cohort_id)) return;
-      const source = indexRows(cohort.cohort_id)
+      const source = returnRows(cohort.cohort_id)
         .filter(row => !cutoff || row.metric_date >= cutoff);
       if (source.length < 2) return;
-      const base = Number(source[0].value);
-      if (!Number.isFinite(base) || base === 0) return;
-      source.forEach(row => rows.push({
-        metric_date: row.metric_date,
-        scope_id: row.scope_id,
-        value: Number(row.value) / base - 1
-      }));
+
+      let previousDate = null;
+      let factor = 1;
+      let segment = 0;
+      source.forEach(row => {
+        const continuous = previousDate != null && dayNumber(row.metric_date) === dayNumber(previousDate) + 1;
+        if (!continuous) {
+          factor = 1;
+          segment += 1;
+        } else {
+          factor *= 1 + Number(row.value);
+        }
+        rows.push({
+          metric_date: row.metric_date,
+          scope_id: row.scope_id,
+          value: factor - 1,
+          segment
+        });
+        previousDate = row.metric_date;
+      });
     });
     return rows;
   }
@@ -466,64 +529,61 @@ function chartRows() {
     .map(metric => ({
       metric_date: metric.metric_date,
       scope_id: metric.scope_id,
-      value: Number(metric.value)
+      value: Number(metric.value),
+      segment: 0
     }));
 }
 
 function renderChart() {
   const svg = document.querySelector('#chart');
+  const tooltip = document.querySelector('#chart-tooltip');
   const legend = document.querySelector('#legend');
   const chips = document.querySelector('#event-chips');
   const selected = chartRows();
 
   if (!selected.length) {
     svg.innerHTML = '<text x="600" y="195" text-anchor="middle" fill="#6e7688">이 기간에 비교 가능한 데이터가 없습니다.</text>';
+    tooltip.hidden = true;
     legend.innerHTML = '';
     chips.innerHTML = '';
     return;
   }
 
   const dates = [...new Set(selected.map(row => row.metric_date))].sort();
-  const dateIndex = new Map(dates.map((date, index) => [date, index]));
+  const startDay = dayNumber(dates[0]);
+  const endDay = dayNumber(dates.at(-1));
+  const spanDays = Math.max(1, endDay - startDay);
   const values = selected.map(row => Number(row.value));
-  let min = Math.min(...values);
-  let max = Math.max(...values);
-  if (chartMode === 'CHANGE' || chartMode === 'RETURN_1D' || chartMode === 'RELATIVE_STRENGTH') {
-    min = Math.min(min, 0);
-    max = Math.max(max, 0);
-  }
-  if (min === max) {
-    min -= .01;
-    max += .01;
-  }
-  const pad = Math.max((max - min) * .08, .0001);
-  min -= pad;
-  max += pad;
+  const scale = niceChartScale(values, true);
+  const min = scale.min;
+  const max = scale.max;
 
   const left = 66, right = 18, top = 24, bottom = 42, width = 1200, height = 390;
-  const x = date => left + (dateIndex.get(date) ?? 0) / Math.max(1, dates.length - 1) * (width - left - right);
+  const x = date => left + (dayNumber(date) - startDay) / spanDays * (width - left - right);
   const y = value => top + (max - value) / (max - min) * (height - top - bottom);
   let html = '';
 
-  for (let index = 0; index <= 4; index += 1) {
-    const value = max - (max - min) * index / 4;
+  scale.ticks.forEach(value => {
     const yy = y(value);
     html += '<line x1="' + left + '" y1="' + yy + '" x2="' + (width - right) + '" y2="' + yy + '" stroke="#232936" />' +
       '<text x="' + (left - 8) + '" y="' + (yy + 4) + '" text-anchor="end" fill="#737c90" font-size="11">' +
-      (chartMode === 'BREADTH' ? plainPct(value) : pct(value)) + '</text>';
-  }
+      axisPct(value) + '</text>';
+  });
   if (min < 0 && max > 0) {
     const yy = y(0);
     html += '<line x1="' + left + '" y1="' + yy + '" x2="' + (width - right) + '" y2="' + yy + '" stroke="#566176" stroke-width="1.2" />';
   }
 
-  const visibleEvents = payload.events.filter(event => dateIndex.has(event.anchor_date));
+  const visibleEvents = payload.events.filter(event => {
+    const day = dayNumber(event.anchor_date);
+    return day >= startDay && day <= endDay;
+  });
   visibleEvents.forEach(event => {
     const xx = x(event.anchor_date);
-    html += '<g><title>' + esc(event.anchor_date + ' · ' + event.title) + '</title>' +
+    html += '<g aria-label="' + esc(event.anchor_date + ' · ' + event.title) + '">' +
       '<line x1="' + xx + '" y1="' + top + '" x2="' + xx + '" y2="' + (height - bottom) +
       '" stroke="#394354" stroke-dasharray="3 5" /><circle cx="' + xx + '" cy="' + (top + 4) +
-      '" r="3" fill="#8490a6" /></g>';
+      '" r="3.5" fill="#8490a6" /></g>';
   });
 
   payload.cohorts.forEach((cohort, cohortIndex) => {
@@ -531,13 +591,23 @@ function renderChart() {
     const rows = selected
       .filter(row => row.scope_id === cohort.cohort_id)
       .sort((a, b) => a.metric_date.localeCompare(b.metric_date));
-    if (rows.length < 2) return;
-    const points = rows.map(row =>
-      x(row.metric_date).toFixed(2) + ',' + y(Number(row.value)).toFixed(2)
-    ).join(' ');
-    html += '<polyline points="' + points + '" fill="none" stroke="' +
-      palette[cohortIndex % palette.length] +
-      '" stroke-width="2" vector-effect="non-scaling-stroke" />';
+    const segments = [...new Set(rows.map(row => row.segment ?? 0))];
+    segments.forEach(segment => {
+      const segmentRows = rows.filter(row => (row.segment ?? 0) === segment);
+      if (segmentRows.length === 1) {
+        const row = segmentRows[0];
+        html += '<circle cx="' + x(row.metric_date) + '" cy="' + y(Number(row.value)) + '" r="2.5" fill="' +
+          palette[cohortIndex % palette.length] + '" />';
+        return;
+      }
+      if (segmentRows.length < 2) return;
+      const points = segmentRows.map(row =>
+        x(row.metric_date).toFixed(2) + ',' + y(Number(row.value)).toFixed(2)
+      ).join(' ');
+      html += '<polyline points="' + points + '" fill="none" stroke="' +
+        palette[cohortIndex % palette.length] +
+        '" stroke-width="2" vector-effect="non-scaling-stroke" />';
+    });
   });
 
   const ticks = [0, Math.floor((dates.length - 1) / 3), Math.floor((dates.length - 1) * 2 / 3), dates.length - 1];
@@ -547,6 +617,7 @@ function renderChart() {
     html += '<text x="' + xx + '" y="' + (height - 14) + '" text-anchor="middle" fill="#737c90" font-size="11">' +
       esc(date) + '</text>';
   });
+  html += '<g id="hover-layer" visibility="hidden" pointer-events="none"></g>';
 
   svg.innerHTML = html;
   legend.innerHTML = payload.cohorts
@@ -559,8 +630,87 @@ function renderChart() {
         esc(cohortName(cohort.cohort_id)) + (count < 2 ? ' · 데이터 부족' : '') + '</span>';
     }).join('');
   chips.innerHTML = visibleEvents
-    .map(event => '<span class="event-chip">' + esc(event.anchor_date.slice(5) + ' · ' + event.title) + '</span>')
+    .map(event => '<span class="event-chip" tabindex="0" data-date="' + esc(event.anchor_date) + '">' +
+      esc(event.anchor_date.slice(5) + ' · ' + event.title) + '</span>')
     .join('');
+
+  const hoverLayer = svg.querySelector('#hover-layer');
+  const chartRect = () => svg.getBoundingClientRect();
+  const hideHover = () => {
+    hoverLayer.setAttribute('visibility', 'hidden');
+    hoverLayer.innerHTML = '';
+    tooltip.hidden = true;
+  };
+  const showHover = (date, clientX = null, clientY = null) => {
+    const dateRows = selected.filter(row => row.metric_date === date);
+    const eventsAtDate = visibleEvents.filter(event => event.anchor_date === date);
+    const xx = x(date);
+    hoverLayer.innerHTML = '<line x1="' + xx + '" y1="' + top + '" x2="' + xx + '" y2="' + (height - bottom) +
+      '" stroke="#909bb0" stroke-width="1" stroke-dasharray="2 3" vector-effect="non-scaling-stroke" />' +
+      dateRows.map(row => {
+        const cohortIndex = payload.cohorts.findIndex(cohort => cohort.cohort_id === row.scope_id);
+        return '<circle cx="' + xx + '" cy="' + y(Number(row.value)) + '" r="4" fill="#11141b" stroke="' +
+          palette[cohortIndex % palette.length] + '" stroke-width="2" vector-effect="non-scaling-stroke" />';
+      }).join('');
+    hoverLayer.setAttribute('visibility', 'visible');
+
+    const eventHtml = eventsAtDate.map(event =>
+      '<div class="tooltip-event">게임사 이벤트 · ' + esc(event.title) +
+      '<div class="tooltip-event-meta">' + esc(anchorLabel(event.anchor_type)) + '</div></div>'
+    ).join('');
+    const valueHtml = payload.cohorts
+      .filter(cohort => enabledCohorts.has(cohort.cohort_id))
+      .map(cohort => {
+        const cohortIndex = payload.cohorts.findIndex(candidate => candidate.cohort_id === cohort.cohort_id);
+        const row = dateRows.find(candidate => candidate.scope_id === cohort.cohort_id);
+        return '<div class="tooltip-row"><span class="tooltip-series"><span class="swatch" style="background:' +
+          palette[cohortIndex % palette.length] + '"></span>' + esc(cohortName(cohort.cohort_id)) +
+          '</span><span class="tooltip-value">' + (row ? esc(pct(row.value)) : '—') + '</span></div>';
+      }).join('');
+    tooltip.innerHTML = '<div class="tooltip-date">' + esc(date) + '</div>' + eventHtml + valueHtml;
+    tooltip.hidden = false;
+
+    const rect = chartRect();
+    const fallbackX = rect.left + xx / width * rect.width;
+    const anchorX = clientX ?? fallbackX;
+    const anchorY = clientY ?? rect.top + 16;
+    const localX = anchorX - rect.left;
+    const localY = anchorY - rect.top;
+    let tooltipLeft = localX + 12;
+    if (tooltipLeft + tooltip.offsetWidth > rect.width - 8) {
+      tooltipLeft = localX - tooltip.offsetWidth - 12;
+    }
+    tooltip.style.left = Math.max(8, tooltipLeft) + 'px';
+    tooltip.style.top = Math.max(8, Math.min(rect.height - tooltip.offsetHeight - 8, localY + 10)) + 'px';
+  };
+
+  svg.onpointermove = event => {
+    const rect = chartRect();
+    if (!rect.width) return;
+    const pointerX = (event.clientX - rect.left) / rect.width * width;
+    if (pointerX < left || pointerX > width - right) {
+      hideHover();
+      return;
+    }
+    const eventThreshold = 10 / rect.width * width;
+    const nearestEvent = visibleEvents
+      .map(item => ({ item, distance: Math.abs(x(item.anchor_date) - pointerX) }))
+      .sort((a, b) => a.distance - b.distance)[0];
+    const date = nearestEvent && nearestEvent.distance <= eventThreshold
+      ? nearestEvent.item.anchor_date
+      : dates.reduce((best, candidate) =>
+          Math.abs(x(candidate) - pointerX) < Math.abs(x(best) - pointerX) ? candidate : best,
+        dates[0]);
+    showHover(date, event.clientX, event.clientY);
+  };
+  svg.onpointerleave = hideHover;
+  chips.querySelectorAll('.event-chip').forEach(chip => {
+    const show = () => showHover(chip.dataset.date);
+    chip.addEventListener('mouseenter', show);
+    chip.addEventListener('focus', show);
+    chip.addEventListener('mouseleave', hideHover);
+    chip.addEventListener('blur', hideHover);
+  });
 }
 
 function maturityLabel(maturity) {

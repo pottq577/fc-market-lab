@@ -13,6 +13,12 @@ test("insight viewer uses the verified benchmark for market headlines and trims 
   assert.match(html, /선수 그룹별 흐름/);
   assert.match(html, /평소보다 크게 움직인 날/);
   assert.match(html, /fetch\('\/api\/benchmark'\)/);
+  assert.match(html, /chart-tooltip/);
+  assert.match(html, /niceChartScale/);
+  assert.match(html, /onpointermove/);
+  assert.match(html, /데이터가 끊기면 새 구간을 0%에서 다시 시작/);
+  assert.doesNotMatch(html, /고급 지표/);
+  assert.doesNotMatch(html, /legacy=1/);
   assert.doesNotMatch(html, /이 화면의 용어 보기/);
   assert.doesNotMatch(html, /이벤트 전후 반응/);
   assert.doesNotMatch(html, /시장 대비 초과 변동/);

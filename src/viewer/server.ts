@@ -5,7 +5,6 @@ import { listViewerRuns, loadViewerPayload } from "./data.ts";
 import { loadBenchmarkViewerPayload } from "./benchmark-data.ts";
 import { benchmarkViewerPage } from "./benchmark-page.ts";
 import { insightViewerPage } from "./insight-page.ts";
-import { viewerPage as legacyViewerPage } from "./page.ts";
 
 export interface ViewerServerOptions {
   dbPath: string;
@@ -35,7 +34,7 @@ export function createViewerServer(options: ViewerServerOptions): {
           "content-type": "text/html; charset=utf-8",
           "cache-control": "no-store",
         });
-        response.end(url.searchParams.get("legacy") === "1" ? legacyViewerPage() : insightViewerPage());
+        response.end(insightViewerPage());
         return;
       }
       if (url.pathname === "/benchmark") {

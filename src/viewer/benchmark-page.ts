@@ -72,7 +72,6 @@ export function benchmarkViewerPage(): string {
     <nav class="nav" aria-label="화면 이동">
       <a href="/">시장 인사이트</a>
       <a class="active" href="/benchmark">시장 대표지표</a>
-      <a href="/?legacy=1">고급 지표</a>
     </nav>
   </header>
   <div id="app"><div class="panel">시장 대표지표를 불러오는 중…</div></div>

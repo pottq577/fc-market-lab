@@ -160,6 +160,8 @@ test("benchmark page explains reliability in plain language and has valid inline
   assert.match(html, /현재 표본으로 과거 재계산/);
   assert.match(html, /시장 규모 가중 중앙값/);
   assert.match(html, /표본을 더 늘려도 같은 결론이 나오는가/);
+  assert.doesNotMatch(html, /고급 지표/);
+  assert.doesNotMatch(html, /legacy=1/);
   assert.doesNotMatch(html, /Nested panel convergence/);
   assert.doesNotMatch(html, /return aggregation/);
   const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
