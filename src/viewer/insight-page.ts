@@ -55,7 +55,7 @@ export function insightViewerPage(): string {
     .cohort-toggle input { margin: 0; }
     #chart-wrap { position: relative; }
     #chart { width: 100%; height: 390px; display: block; cursor: crosshair; touch-action: none; }
-    .chart-tooltip { position: absolute; z-index: 3; min-width: 220px; max-width: 320px; padding: 10px 11px; border: 1px solid #343b4b; border-radius: 9px; background: rgba(18, 22, 30, .96); box-shadow: 0 8px 24px rgba(0, 0, 0, .28); pointer-events: none; font-size: 11px; line-height: 1.45; }
+    .chart-tooltip { position: absolute; z-index: 3; min-width: 300px; max-width: 410px; padding: 10px 11px; border: 1px solid #343b4b; border-radius: 9px; background: rgba(18, 22, 30, .96); box-shadow: 0 8px 24px rgba(0, 0, 0, .28); pointer-events: none; font-size: 11px; line-height: 1.45; }
     .chart-tooltip[hidden] { display: none; }
     .tooltip-date { margin-bottom: 7px; color: #edf0f7; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
     .tooltip-event { margin: 0 0 7px; padding: 7px 8px; border-radius: 7px; background: #171c26; color: #c7cfdd; }
@@ -63,6 +63,13 @@ export function insightViewerPage(): string {
     .tooltip-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 4px; color: #b8c0cf; }
     .tooltip-series { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
     .tooltip-value { color: #edf0f7; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .tooltip-group { margin-top: 8px; padding-top: 8px; border-top: 1px solid #2a3040; }
+    .tooltip-group:first-of-type { margin-top: 0; padding-top: 0; border-top: 0; }
+    .tooltip-group-head { display: flex; align-items: center; gap: 6px; color: #dce2ec; font-weight: 650; }
+    .tooltip-price { margin-top: 5px; color: #c7cfdd; }
+    .tooltip-price strong { color: #edf0f7; font-variant-numeric: tabular-nums; }
+    .tooltip-meta { margin-top: 3px; color: #8d97aa; }
+    .tooltip-samples { margin-top: 5px; color: #707b90; line-height: 1.5; }
     .legend, .event-chips { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 9px; font-size: 12px; color: #b7bdcc; }
     .legend-item, .event-chip { display: inline-flex; align-items: center; gap: 6px; }
     .swatch { width: 16px; height: 3px; border-radius: 2px; }
@@ -124,9 +131,10 @@ const palette = ['#7aa2f7','#9ece6a','#e0af68','#bb9af7','#7dcfff','#f7768e','#7
 const DAY_MS = 86400000;
 let payload = null;
 let benchmark = null;
-let chartMode = 'CHANGE';
+let chartMode = 'PRICE';
 let chartWindow = 90;
 let enabledCohorts = new Set();
+let priceStatsByKey = new Map();
 const cohortLabels = {
   SAMPLE_MARKET: '초기 시장 표본',
   CORE: '핵심 인기 선수 그룹',
@@ -152,6 +160,19 @@ function pct(value) {
 function plainPct(value) {
   if (value == null || Number.isNaN(Number(value))) return '—';
   return (Number(value) * 100).toFixed(2) + '%';
+}
+function bp(value) {
+  if (value == null || Number.isNaN(Number(value))) return '—';
+  return Math.round(Number(value)).toLocaleString('ko-KR') + ' BP';
+}
+function axisBp(value) {
+  if (value == null || Number.isNaN(Number(value))) return '—';
+  const n = Number(value);
+  const abs = Math.abs(n);
+  if (abs >= 100000000) return (n / 100000000).toFixed(abs >= 1000000000 ? 0 : 1) + '억 BP';
+  if (abs >= 10000) return (n / 10000).toFixed(abs >= 100000 ? 0 : 1) + '만 BP';
+  if (abs >= 1000) return (n / 1000).toFixed(abs >= 10000 ? 0 : 1) + '천 BP';
+  return Math.round(n).toLocaleString('ko-KR') + ' BP';
 }
 function axisPct(value) {
   if (value == null || Number.isNaN(Number(value))) return '—';
@@ -202,6 +223,38 @@ function cohortName(id) {
 }
 function anchorLabel(type) {
   return anchorLabels[type] ?? type.replaceAll('_', ' ');
+}
+function priceStat(scopeId, date) {
+  return priceStatsByKey.get(scopeId + '|' + date) ?? null;
+}
+function returnAt(scopeId, date) {
+  return payload.metrics.find(metric =>
+    metric.scope_id === scopeId &&
+    metric.metric_date === date &&
+    metric.metric_name === 'RETURN_1D' &&
+    metric.status === 'OK' &&
+    metric.value != null
+  ) ?? null;
+}
+function chartEvents() {
+  const events = [...payload.events];
+  const basis = payload.price_basis;
+  const alreadyIncluded = events.some(event =>
+    event.anchor_date === basis?.unit_adjustment_date && event.title.includes('화폐 단위 조정')
+  );
+  if (basis?.unit_adjustment_date && !alreadyIncluded) {
+    events.push({
+      event_id: 'bp-unit-adjustment-2026-08-20',
+      title: 'BP 화폐 단위 조정 (1억 BP → 1 BP)',
+      event_type: 'CURRENCY_UNIT_ADJUSTMENT',
+      anchor_type: 'EFFECTIVE',
+      anchor_at: basis.unit_adjustment_at,
+      anchor_date: basis.unit_adjustment_date
+    });
+  }
+  return events.sort((left, right) =>
+    left.anchor_date.localeCompare(right.anchor_date) || left.title.localeCompare(right.title)
+  );
 }
 function sampleCohort() {
   return payload?.cohorts.find(c => c.name === 'SAMPLE_MARKET') ?? null;
@@ -369,12 +422,15 @@ async function loadRun(runId) {
     if (!marketReady()) {
       throw new Error('검증된 시장 대표지표가 아직 준비되지 않았어요. 시장 대표지표 검증을 먼저 완료해 주세요.');
     }
+    priceStatsByKey = new Map(
+      (payload.price_stats ?? []).map(stat => [stat.scope_id + '|' + stat.metric_date, stat])
+    );
     enabledCohorts = new Set(
       payload.cohorts
         .filter(c => c.name !== 'SAMPLE_MARKET' && historyCount(c.cohort_id, 90) >= 7)
         .map(c => c.cohort_id)
     );
-    chartMode = 'CHANGE';
+    chartMode = 'PRICE';
     chartWindow = 90;
     render();
   } catch (error) {
@@ -432,10 +488,11 @@ function render() {
       card('7일 동안 가장 많이 오른 그룹', strongest?.name ?? '—', strongest?.change ?? null, strongest ? pct(strongest.change) : '비교 데이터 부족') +
     '</section>' +
     '<section class="panel">' +
-      '<div class="toolbar"><div class="left"><div><h2 style="margin:0 0 4px">선수 그룹별 흐름</h2>' +
-      '<p>같은 기간에 어떤 선수 그룹이 더 많이 오르고 내렸는지 비교해요.</p></div>' +
+      '<div class="toolbar"><div class="left"><div><h2 style="margin:0 0 4px">인기 선수 실제 시세 흐름</h2>' +
+      '<p>실제 시장 기준가를 먼저 보고, 필요할 때 등락 비교지표로 바꿔볼 수 있어요.</p></div>' +
       '<select id="mode-select" class="metric-select">' +
-        '<option value="CHANGE">기간 누적 등락</option>' +
+        '<option value="PRICE">실제 중앙 시세 (BP)</option>' +
+        '<option value="CHANGE">누적 비교지표</option>' +
         '<option value="RETURN_1D">하루 등락</option>' +
       '</select>' +
       '<select id="window-select" class="window-select">' +
@@ -444,7 +501,7 @@ function render() {
       '<div id="chart-wrap"><svg id="chart" viewBox="0 0 1200 390" preserveAspectRatio="none"></svg>' +
       '<div id="chart-tooltip" class="chart-tooltip" hidden></div></div>' +
       '<div id="legend" class="legend"></div><div id="event-chips" class="event-chips"></div>' +
-      '<div class="chart-note">기간 누적 등락은 표시 구간의 첫 유효 날짜를 0%로 맞추고 하루 등락률을 이어 계산해요. 데이터가 끊기면 새 구간을 0%에서 다시 시작해요.</div>' +
+      '<div class="chart-note">기본 선은 실제 시장 기준가의 그룹 중앙값(BP)이에요. 누적 비교지표는 매일의 그룹 중앙 등락률을 복리로 이어 만든 파생값이며 실제 가격 자체는 아니에요. 데이터가 끊기면 새 구간을 0%에서 다시 시작해요. 8/20 이전 과거 시세도 데이터센터가 1억:1 조정 후 제공한 새 BP 단위로 표시해요.</div>' +
     '</section>' +
     '<section class="panel"><h2>평소보다 크게 움직인 날</h2>' +
       '<p style="margin-bottom:10px">평소보다 가격이 크게 움직인 날짜만 모았어요. 근처 이벤트는 함께 보여주지만 원인이라고 단정하지 않아요.</p>' +
@@ -486,6 +543,30 @@ function renderCohortToggles() {
 function chartRows() {
   const latest = latestDate();
   const cutoff = latest && chartWindow > 0 ? dateMinus(latest, chartWindow) : null;
+
+  if (chartMode === 'PRICE') {
+    const rows = [];
+    payload.cohorts.forEach(cohort => {
+      if (!enabledCohorts.has(cohort.cohort_id)) return;
+      const source = (payload.price_stats ?? [])
+        .filter(stat => stat.scope_id === cohort.cohort_id && (!cutoff || stat.metric_date >= cutoff))
+        .sort((left, right) => left.metric_date.localeCompare(right.metric_date));
+      let previousDate = null;
+      let segment = 0;
+      source.forEach(stat => {
+        const continuous = previousDate != null && dayNumber(stat.metric_date) === dayNumber(previousDate) + 1;
+        if (!continuous) segment += 1;
+        rows.push({
+          metric_date: stat.metric_date,
+          scope_id: stat.scope_id,
+          value: Number(stat.median_price),
+          segment
+        });
+        previousDate = stat.metric_date;
+      });
+    });
+    return rows;
+  }
 
   if (chartMode === 'CHANGE') {
     const rows = [];
@@ -554,7 +635,7 @@ function renderChart() {
   const endDay = dayNumber(dates.at(-1));
   const spanDays = Math.max(1, endDay - startDay);
   const values = selected.map(row => Number(row.value));
-  const scale = niceChartScale(values, true);
+  const scale = niceChartScale(values, chartMode !== 'PRICE');
   const min = scale.min;
   const max = scale.max;
 
@@ -567,14 +648,14 @@ function renderChart() {
     const yy = y(value);
     html += '<line x1="' + left + '" y1="' + yy + '" x2="' + (width - right) + '" y2="' + yy + '" stroke="#232936" />' +
       '<text x="' + (left - 8) + '" y="' + (yy + 4) + '" text-anchor="end" fill="#737c90" font-size="11">' +
-      axisPct(value) + '</text>';
+      (chartMode === 'PRICE' ? axisBp(value) : axisPct(value)) + '</text>';
   });
   if (min < 0 && max > 0) {
     const yy = y(0);
     html += '<line x1="' + left + '" y1="' + yy + '" x2="' + (width - right) + '" y2="' + yy + '" stroke="#566176" stroke-width="1.2" />';
   }
 
-  const visibleEvents = payload.events.filter(event => {
+  const visibleEvents = chartEvents().filter(event => {
     const day = dayNumber(event.anchor_date);
     return day >= startDay && day <= endDay;
   });
@@ -663,9 +744,28 @@ function renderChart() {
       .map(cohort => {
         const cohortIndex = payload.cohorts.findIndex(candidate => candidate.cohort_id === cohort.cohort_id);
         const row = dateRows.find(candidate => candidate.scope_id === cohort.cohort_id);
-        return '<div class="tooltip-row"><span class="tooltip-series"><span class="swatch" style="background:' +
-          palette[cohortIndex % palette.length] + '"></span>' + esc(cohortName(cohort.cohort_id)) +
-          '</span><span class="tooltip-value">' + (row ? esc(pct(row.value)) : '—') + '</span></div>';
+        const stat = priceStat(cohort.cohort_id, date);
+        const dailyReturn = returnAt(cohort.cohort_id, date);
+        const priceHtml = stat
+          ? '<div class="tooltip-price">실제 중앙 시세 <strong>' + esc(bp(stat.median_price)) + '</strong></div>' +
+            '<div class="tooltip-meta">중간 50% ' + esc(bp(stat.p25_price)) + ' ~ ' + esc(bp(stat.p75_price)) +
+            ' · 실제 가격 ' + esc(stat.valid_count + '/' + stat.total_count + '명') +
+            ' · ' + esc(plainPct(stat.coverage_ratio)) + ' 반영</div>'
+          : '<div class="tooltip-meta">실제 시세 데이터 없음</div>';
+        const dailyHtml = dailyReturn
+          ? '<div class="tooltip-meta">당일 그룹 중앙 등락 ' + esc(pct(dailyReturn.value)) + '</div>'
+          : '';
+        const cumulativeHtml = chartMode === 'CHANGE' && row
+          ? '<div class="tooltip-meta">선택 구간 누적 비교지표 ' + esc(pct(row.value)) + '</div>'
+          : '';
+        const sampleHtml = stat?.samples?.length
+          ? '<div class="tooltip-samples">실제 카드 표본 · ' + stat.samples.map(sample =>
+              esc(sample.season + ' ' + sample.player_name + ' +' + sample.grade + ' · ' + bp(sample.price))
+            ).join('<br>') + '</div>'
+          : '';
+        return '<div class="tooltip-group"><div class="tooltip-group-head"><span class="swatch" style="background:' +
+          palette[cohortIndex % palette.length] + '"></span>' + esc(cohortName(cohort.cohort_id)) + '</div>' +
+          priceHtml + dailyHtml + cumulativeHtml + sampleHtml + '</div>';
       }).join('');
     tooltip.innerHTML = '<div class="tooltip-date">' + esc(date) + '</div>' + eventHtml + valueHtml;
     tooltip.hidden = false;
