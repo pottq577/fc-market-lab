@@ -28,7 +28,7 @@ export function insightViewerPage(): string {
     .eyebrow { color: #73809a; font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; margin-bottom: 5px; }
     .panel, .card { background: #11141b; border: 1px solid #222733; border-radius: 12px; }
     .panel { padding: 16px; margin-top: 14px; overflow: hidden; }
-    .cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+    .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
     .card { padding: 14px 15px; min-height: 88px; }
     .label { color: #7f8799; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
     .value { margin-top: 8px; font-size: 20px; font-variant-numeric: tabular-nums; }
@@ -94,7 +94,7 @@ export function insightViewerPage(): string {
     <div>
       <div class="eyebrow">FC온라인 이적시장</div>
       <h1>시장 인사이트</h1>
-      <p>최근 시장 흐름, 강한 선수군, 이벤트 이후 반응을 먼저 요약한다.</p>
+      <p>먼저 시장이 얼마나 올랐는지 보여줘요. 더 궁금하면 선수 그룹별 흐름을 내려볼 수 있어요.</p>
     </div>
     <div class="header-actions">
       <nav class="nav" aria-label="화면 이동">
@@ -103,7 +103,7 @@ export function insightViewerPage(): string {
         <a href="/?legacy=1">고급 지표</a>
       </nav>
       <div class="run-picker">
-        <div class="label" style="margin-bottom:6px">분석 결과</div>
+        <div class="label" style="margin-bottom:6px">선수 그룹 분석 기준</div>
         <select id="run-select"></select>
       </div>
     </div>
@@ -114,15 +114,16 @@ export function insightViewerPage(): string {
 const palette = ['#7aa2f7','#9ece6a','#e0af68','#bb9af7','#7dcfff','#f7768e','#73daca','#c0caf5'];
 const DAY_MS = 86400000;
 let payload = null;
+let benchmark = null;
 let chartMode = 'CHANGE';
 let chartWindow = 90;
 let enabledCohorts = new Set();
 const cohortLabels = {
-  SAMPLE_MARKET: '시장 전체 표본',
-  CORE: '핵심 인기 선수군',
-  META: '메타 상위 선수군',
-  PACK_EXPOSED: '선수팩 직접 공급군',
-  INDIRECT_EXPOSED: '선수팩 간접 영향군'
+  SAMPLE_MARKET: '초기 시장 표본',
+  CORE: '핵심 인기 선수 그룹',
+  META: '메타 상위 선수 그룹',
+  PACK_EXPOSED: '선수팩 직접 공급 그룹',
+  INDIRECT_EXPOSED: '선수팩 간접 영향 그룹'
 };
 const anchorLabels = {
   ANNOUNCED: '공지 시점',
@@ -186,29 +187,48 @@ function changeOver(scopeId, days) {
   if (!start || !end || start.value == null || end.value == null || Number(start.value) === 0) return null;
   return Number(end.value) / Number(start.value) - 1;
 }
-function latestBreadth() {
-  const sample = sampleCohort();
-  const latest = latestDate();
-  if (!sample || !latest) return null;
-  const row = payload.metrics.find(m =>
-    m.scope_id === sample.cohort_id &&
-    m.metric_date === latest &&
-    m.metric_name === 'BREADTH' &&
-    m.status === 'OK'
+function marketReady() {
+  return benchmark?.published === true &&
+    benchmark.analysis_version === 'market-benchmark-v2' &&
+    benchmark.benchmark_status === 'STABLE' &&
+    benchmark.display_role === 'SELECTED_PRODUCTION';
+}
+function marketMetric(name) {
+  return benchmark?.latest_metrics.find(item => item.metric_name === name) ?? null;
+}
+function marketHistory(name) {
+  return (benchmark?.history_metrics ?? [])
+    .filter(item => item.metric_name === name && item.metric_status === 'OK' && item.point_value != null)
+    .sort((a, b) => a.metric_date.localeCompare(b.metric_date));
+}
+function marketLatestDate() {
+  return benchmark?.latest_metric_date ?? null;
+}
+function marketChangeOver(days) {
+  const latest = marketLatestDate();
+  if (!latest) return null;
+  const target = dateMinus(latest, days);
+  const rows = marketHistory('RETURN_1D').filter(
+    row => row.metric_date > target && row.metric_date <= latest
   );
-  return row?.value ?? null;
+  if (rows.length !== days) return null;
+  return rows.reduce((factor, row) => factor * (1 + Number(row.point_value)), 1) - 1;
+}
+function latestBreadth() {
+  return marketMetric('BREADTH')?.point_value ?? null;
 }
 function latestCoverage() {
-  const sample = sampleCohort();
-  const latest = latestDate();
-  if (!sample || !latest) return null;
-  const row = payload.metrics.find(m =>
-    m.scope_id === sample.cohort_id &&
-    m.metric_date === latest &&
-    m.metric_name === 'INDEX' &&
-    m.status === 'OK'
+  return marketMetric('RETURN_1D')?.weighted_coverage ?? null;
+}
+function marketBackcastNotice() {
+  const latest = marketLatestDate();
+  if (!latest) return '';
+  const cutoff = dateMinus(latest, 30);
+  const includesBackcast = marketHistory('RETURN_1D').some(
+    row => row.metric_date > cutoff && row.metric_date <= latest && row.period_type === 'FIXED_PANEL_BACKCAST'
   );
-  return row?.coverage_ratio ?? null;
+  if (!includesBackcast) return '';
+  return '최근 30일 일부는 지금 고른 대표 선수 ' + benchmark.display_panel_size + '명의 당시 가격으로 다시 계산했어요.';
 }
 function rankCohorts(days) {
   return payload.cohorts
@@ -287,13 +307,22 @@ async function initRuns() {
 
 async function loadRun(runId) {
   try {
-    payload = await fetch('/api/data?run=' + encodeURIComponent(runId)).then(async response => {
-      if (!response.ok) throw new Error(await response.text());
-      return response.json();
-    });
+    [payload, benchmark] = await Promise.all([
+      fetch('/api/data?run=' + encodeURIComponent(runId)).then(async response => {
+        if (!response.ok) throw new Error(await response.text());
+        return response.json();
+      }),
+      fetch('/api/benchmark').then(async response => {
+        if (!response.ok) throw new Error(await response.text());
+        return response.json();
+      })
+    ]);
+    if (!marketReady()) {
+      throw new Error('검증된 시장 대표지표가 아직 준비되지 않았어요. 시장 대표지표 검증을 먼저 완료해 주세요.');
+    }
     enabledCohorts = new Set(
       payload.cohorts
-        .filter(c => c.name === 'SAMPLE_MARKET' || historyCount(c.cohort_id, 90) >= 7)
+        .filter(c => c.name !== 'SAMPLE_MARKET' && historyCount(c.cohort_id, 90) >= 7)
         .map(c => c.cohort_id)
     );
     chartMode = 'CHANGE';
@@ -305,90 +334,71 @@ async function loadRun(runId) {
 }
 
 function summaryLines() {
-  const sample = sampleCohort();
-  if (!sample) return '<div>• 시장 전체 표본이 없어 시장 요약을 만들 수 없다.</div>';
-  const change7 = changeOver(sample.cohort_id, 7);
-  const change30 = changeOver(sample.cohort_id, 30);
+  if (!marketReady()) return '<div>검증된 시장 대표지표가 아직 없다.</div>';
+  const change7 = marketChangeOver(7);
+  const change30 = marketChangeOver(30);
   const breadth = latestBreadth();
-  const ranked = rankCohorts(7);
-  const strongest = ranked[0] ?? null;
-  const weakest = ranked.at(-1) ?? null;
-  const shocks = shocksInLast(30);
   const lines = [];
 
   if (change7 != null && change30 != null) {
-    lines.push('<div>• 시장 전체 표본은 최근 7일 <strong class="' + signedClass(change7) + '">' +
-      pct(change7) + '</strong>, 최근 30일 <strong class="' + signedClass(change30) + '">' +
-      pct(change30) + '</strong> 움직였다.</div>');
+    lines.push('<div>최근 7일 시장은 <strong class="' + signedClass(change7) + '">' +
+      pct(change7) + '</strong>, 최근 30일은 <strong class="' + signedClass(change30) + '">' +
+      pct(change30) + '</strong> 움직였어요.</div>');
   }
   if (breadth != null) {
-    let breadthText = '상승/하락이 혼재돼 있다';
-    if (Number(breadth) >= .7) breadthText = '표본 다수가 함께 상승했다';
-    else if (Number(breadth) <= .3) breadthText = '상승이 소수에 제한됐다';
-    lines.push('<div>• 최신 관측일에 가격이 오른 선수 비율은 <strong>' + plainPct(breadth) + '</strong>. ' + breadthText + '.</div>');
+    let breadthText = '오른 선수와 내린 선수가 비슷하게 섞여 있어요';
+    if (Number(breadth) >= .7) breadthText = '대표 선수 대부분이 함께 올랐어요';
+    else if (Number(breadth) <= .3) breadthText = '오른 선수는 일부에 그쳤어요';
+    lines.push('<div>가장 최근에는 대표 선수 중 <strong>' + plainPct(breadth) + '</strong>가 전날보다 올랐어요. ' + breadthText + '.</div>');
   }
-  if (strongest && weakest) {
-    lines.push('<div>• 최근 7일 선수군 중 <strong>' + esc(strongest.name) + ' ' + pct(strongest.change) +
-      '</strong>가 가장 강하고, <strong>' + esc(weakest.name) + ' ' + pct(weakest.change) +
-      '</strong>가 가장 약했다.</div>');
-  }
-  lines.push('<div>• 최근 30일 급변 신호는 <strong>' + shocks.length +
-    '</strong>건 감지됐다. 급변 감지는 원인을 뜻하지 않는다.</div>');
   return lines.join('');
 }
 
 function render() {
-  const sample = sampleCohort();
-  const change7 = sample ? changeOver(sample.cohort_id, 7) : null;
-  const change30 = sample ? changeOver(sample.cohort_id, 30) : null;
+  const change7 = marketChangeOver(7);
+  const change30 = marketChangeOver(30);
   const breadth = latestBreadth();
   const ranked = rankCohorts(7);
   const strongest = ranked[0] ?? null;
   const coverage = latestCoverage();
-  const shocks30 = shocksInLast(30);
+  const latestReturn = marketMetric('RETURN_1D');
   const app = document.querySelector('#app');
+  const backcastNotice = marketBackcastNotice();
+  const basis = [
+    marketLatestDate() ? marketLatestDate() + ' 기준' : null,
+    benchmark?.display_panel_size ? '대표 선수 ' + benchmark.display_panel_size + '명' : null,
+    latestReturn ? latestReturn.valid_count + '/' + latestReturn.total_count + '명 가격 반영' : null,
+    coverage == null ? null : '데이터 ' + plainPct(coverage) + ' 반영'
+  ].filter(Boolean).join(' · ');
 
   app.innerHTML =
-    '<section class="insight"><div class="insight-head"><strong>현재 시장 요약</strong><span class="data-basis">데이터 기준 ' + esc(latestDate() ?? '—') + (coverage == null ? '' : ' · 표본 반영률 ' + plainPct(coverage)) + '</span></div><div class="insight-lines">' +
-      summaryLines() + '</div></section>' +
-    '<section class="cards" style="margin-top:14px">' +
-      card('최근 7일 시장', pct(change7), change7, '시장 전체 표본') +
-      card('최근 30일 시장', pct(change30), change30, '시장 전체 표본') +
-      card('가격이 오른 선수 비율', plainPct(breadth), null, '최신 관측일 기준') +
-      card('7일 변동 상위 선수군', strongest?.name ?? '—', strongest?.change ?? null, strongest ? pct(strongest.change) : '비교 데이터 부족') +
-      card('최근 30일 급변 감지', String(shocks30.length), null, '평소 변동 범위를 벗어난 신호') +
+    '<section class="insight"><div class="insight-head"><strong>지금 시장은</strong><span class="data-basis">' + esc(basis) + '</span></div><div class="insight-lines">' +
+      summaryLines() + '</div>' +
+      (backcastNotice ? '<div class="data-basis" style="margin-top:8px">' + esc(backcastNotice) + '</div>' : '') +
     '</section>' +
-    '<details class="terms"><summary>이 화면의 용어 보기</summary><div class="term-grid">' +
-      '<div class="term"><strong>선수군</strong>비슷한 조건으로 묶어 함께 비교하는 선수 집단</div>' +
-      '<div class="term"><strong>시장 전체 표본</strong>시장 흐름의 기준으로 쓰는 대표 선수 집단</div>' +
-      '<div class="term"><strong>가격이 오른 선수 비율</strong>전일보다 가격이 오른 선수가 표본에서 차지하는 비중</div>' +
-      '<div class="term"><strong>급변 감지</strong>평소 변동 범위를 통계적으로 크게 벗어난 날짜 후보</div>' +
-    '</div></details>' +
+    '<section class="cards" style="margin-top:14px">' +
+      card('최근 7일', pct(change7), change7, benchmark.display_panel_size + '명 대표지표') +
+      card('최근 30일', pct(change30), change30, benchmark.display_panel_size + '명 대표지표') +
+      card('오늘 오른 선수', plainPct(breadth), null, '대표 선수 중 전날보다 오른 비율') +
+      card('7일 동안 가장 많이 오른 그룹', strongest?.name ?? '—', strongest?.change ?? null, strongest ? pct(strongest.change) : '비교 데이터 부족') +
+    '</section>' +
     '<section class="panel">' +
-      '<div class="toolbar"><div class="left"><div><h2 style="margin:0 0 4px">선수군별 가격 흐름</h2>' +
-      '<p>각 선수군의 시작점을 0%로 맞춰, 같은 기간 동안 어느 집단이 더 많이 움직였는지 비교한다.</p></div>' +
+      '<div class="toolbar"><div class="left"><div><h2 style="margin:0 0 4px">선수 그룹별 흐름</h2>' +
+      '<p>같은 기간에 어떤 선수 그룹이 더 많이 오르고 내렸는지 비교해요.</p></div>' +
       '<select id="mode-select" class="metric-select">' +
         '<option value="CHANGE">기간 누적 등락</option>' +
-        '<option value="RETURN_1D">하루 가격 변동</option>' +
-        '<option value="RELATIVE_STRENGTH">시장 대비 초과 변동</option>' +
-        '<option value="BREADTH">가격이 오른 선수 비율</option>' +
+        '<option value="RETURN_1D">하루 등락</option>' +
       '</select>' +
       '<select id="window-select" class="window-select">' +
         '<option value="30">30일</option><option value="90" selected>90일</option><option value="0">전체</option>' +
       '</select></div><div id="cohort-toggles" class="cohorts"></div></div>' +
       '<svg id="chart" viewBox="0 0 1200 390" preserveAspectRatio="none"></svg>' +
       '<div id="legend" class="legend"></div><div id="event-chips" class="event-chips"></div>' +
-      '<div class="chart-note">기간 누적 등락은 각 선수군의 표시 구간 첫 값을 0%로 맞춘 비교용 값이다. 절대 가격 수준을 비교하는 그래프가 아니다.</div>' +
+      '<div class="chart-note">기간 누적 등락은 각 그룹의 시작점을 0%로 맞춘 비교값이에요.</div>' +
     '</section>' +
-    '<section class="grid2">' +
-      '<div class="panel"><div class="toolbar"><div><h2 style="margin:0 0 4px">이벤트 전후 반응</h2>' +
-      '<p>이벤트 날짜를 기준으로 각 선수군이 시장 전체 표본보다 얼마나 더 오르거나 덜 올랐는지 본다. 후속 데이터가 부족하면 판단을 보류한다.</p></div>' +
-      '<select id="event-select" style="width:390px"></select></div><div id="event-summary"></div>' +
-      '<div id="replay-table" class="table-wrap"></div></div>' +
-      '<div class="panel"><h2>평소보다 크게 움직인 날</h2>' +
-      '<p style="margin-bottom:10px">이상도는 평소 변동폭에서 얼마나 멀리 벗어났는지 보여준다. 가까운 이벤트는 시간상 근접했다는 뜻이며 원인으로 확정하지 않는다.</p>' +
-      '<div id="shock-table" class="table-wrap"></div></div>' +
-    '</section>';
+    '<section class="panel"><h2>평소보다 크게 움직인 날</h2>' +
+      '<p style="margin-bottom:10px">평소보다 가격이 크게 움직인 날짜만 모았어요. 근처 이벤트는 함께 보여주지만 원인이라고 단정하지 않아요.</p>' +
+      '<div id="shock-table" class="table-wrap"></div></section>';
 
   document.querySelector('#mode-select').value = chartMode;
   document.querySelector('#mode-select').addEventListener('change', event => {
@@ -403,7 +413,6 @@ function render() {
 
   renderCohortToggles();
   renderChart();
-  renderEventControls();
   renderShocks();
 }
 
@@ -656,24 +665,31 @@ function renderShocks() {
     return;
   }
 
+  const visibleShocks = payload.shocks.filter(shock =>
+    payload.cohorts.find(cohort => cohort.cohort_id === shock.scope_id)?.name !== 'SAMPLE_MARKET'
+  );
+  if (!visibleShocks.length) {
+    host.innerHTML = '<div class="muted">감지된 급변 날짜가 없다.</div>';
+    return;
+  }
+
   host.innerHTML =
-    '<table><thead><tr><th>날짜 / 선수군</th><th>가격 변동</th><th>이상도</th></tr></thead><tbody>' +
-    payload.shocks.map(shock => {
+    '<table><thead><tr><th>날짜 / 선수 그룹</th><th>가격 변동</th></tr></thead><tbody>' +
+    visibleShocks.map(shock => {
       const context = shockContext(shock);
-      let note = '등록된 사건과 ±3일 내 근접 없음';
+      let note = '가까운 시점에 등록된 이벤트 없음';
       if (context) {
         const distance = context.distance;
         const timing = distance === 0
           ? '같은 날'
           : distance > 0
-            ? '사건 ' + distance + '일 후'
-            : '사건 ' + Math.abs(distance) + '일 전';
+            ? '이벤트 ' + distance + '일 후'
+            : '이벤트 ' + Math.abs(distance) + '일 전';
         note = timing + ' · ' + context.event.title;
       }
       return '<tr><td><div class="shock">' + esc(shock.metric_date + ' · ' + cohortName(shock.scope_id)) +
         '</div><div class="context">' + esc(note) + '</div></td><td class="' +
-        signedClass(shock.value) + '">' + esc(pct(shock.value)) + '</td><td>' +
-        Number(shock.robust_z).toFixed(2) + '</td></tr>';
+        signedClass(shock.value) + '">' + esc(pct(shock.value)) + '</td></tr>';
     }).join('') +
     '</tbody></table>';
 }

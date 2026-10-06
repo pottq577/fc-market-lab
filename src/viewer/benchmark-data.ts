@@ -61,6 +61,7 @@ export interface ViewerBenchmarkPayload {
   return_aggregation: string;
   latest_metric_date: string | null;
   latest_metrics: ViewerBenchmarkMetric[];
+  history_metrics: ViewerBenchmarkMetric[];
   convergence_pairs: ViewerConvergencePair[];
 }
 
@@ -114,7 +115,10 @@ export function loadBenchmarkViewerPayload(
          FROM dataset_snapshot_benchmark dsb
          JOIN analysis_run ar ON ar.dataset_snapshot_id = dsb.dataset_snapshot_id
          WHERE ar.analysis_version IN ('market-benchmark-v1', 'market-benchmark-v2') AND ar.status = 'SUCCEEDED'
-         ORDER BY ar.created_at DESC, ar.analysis_run_id DESC
+         ORDER BY CASE ar.analysis_version
+           WHEN 'market-benchmark-v2' THEN 0
+           ELSE 1 END,
+           ar.created_at DESC, ar.analysis_run_id DESC
          LIMIT 1`,
       ).get() as typeof publication;
     }
@@ -250,6 +254,34 @@ export function loadBenchmarkViewerPayload(
       ).map((row) => ({ ...row })) as unknown as ViewerBenchmarkMetric[]
     : [];
 
+  const historyMetrics = db.prepare(
+    `SELECT bm.metric_name, bm.metric_date, bm.period_type,
+            bm.value AS point_value, bm.status AS metric_status,
+            bm.valid_count, bm.total_count, bm.weighted_coverage,
+            bmu.lower_value, bmu.upper_value,
+            bmu.status AS uncertainty_status,
+            bmu.valid_replicates, bmu.total_replicates
+     FROM benchmark_metric bm
+     LEFT JOIN benchmark_metric_uncertainty bmu
+       ON bmu.benchmark_uncertainty_run_id = ?
+      AND bmu.panel_id = bm.panel_id
+      AND bmu.metric_date = bm.metric_date
+      AND bmu.metric_name = bm.metric_name
+     WHERE bm.benchmark_metric_run_id = ?
+       AND bm.panel_id = ?
+       AND bm.metric_name IN ('RETURN_1D', 'INDEX', 'BREADTH')
+     ORDER BY bm.metric_date,
+       CASE bm.metric_name
+         WHEN 'RETURN_1D' THEN 1
+         WHEN 'INDEX' THEN 2
+         WHEN 'BREADTH' THEN 3
+         ELSE 99 END`,
+  ).all(
+    run.benchmark_uncertainty_run_id,
+    run.benchmark_metric_run_id,
+    displayPanelId,
+  ).map((row) => ({ ...row })) as unknown as ViewerBenchmarkMetric[];
+
   const pairs = db.prepare(
     `SELECT sp.panel_label AS smaller_panel_label,
             pc.smaller_panel_size,
@@ -305,6 +337,7 @@ export function loadBenchmarkViewerPayload(
     return_aggregation: benchmarkReturnAggregation(metricRun.metric_version),
     latest_metric_date: latest?.metric_date ?? null,
     latest_metrics: metrics,
+    history_metrics: historyMetrics,
     convergence_pairs: pairs.map((row) => ({
       smaller_panel_label: row.smaller_panel_label,
       smaller_panel_size: Number(row.smaller_panel_size),

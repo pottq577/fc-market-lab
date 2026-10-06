@@ -125,7 +125,29 @@ test("loads published benchmark viewer data with reliability metadata", () => {
     assert.equal(payload.latest_metrics.length, 5);
     assert.equal(payload.latest_metrics[0]?.metric_name, "RETURN_1D");
     assert.equal(payload.latest_metrics[0]?.weighted_coverage, 0.9875);
+    assert.equal(payload.history_metrics.length, 3);
+    assert.deepEqual(
+      payload.history_metrics.map((metric) => metric.metric_name),
+      ["RETURN_1D", "INDEX", "BREADTH"],
+    );
     assert.deepEqual(payload.convergence_pairs[0]?.reasons, ["DIRECTION_COMPARABLE_DAYS"]);
+  } finally {
+    db.close();
+  }
+});
+
+test("default benchmark viewer prefers a published v2 run over a newer v1 run", () => {
+  const db = fixture();
+  try {
+    db.prepare("INSERT INTO dataset_snapshot_benchmark VALUES ('ds-v2','conv','p800','DIAGNOSTIC_LARGEST','2026-10-02T04:00:00Z')").run();
+    db.prepare("INSERT INTO analysis_run VALUES ('run-v2','ds-v2','market-benchmark-v2','2026-10-02T04:00:00Z','SUCCEEDED')").run();
+    db.prepare("INSERT INTO dataset_snapshot_benchmark VALUES ('ds-v1-newer','conv','p800','DIAGNOSTIC_LARGEST','2026-10-02T05:00:00Z')").run();
+    db.prepare("INSERT INTO analysis_run VALUES ('run-v1-newer','ds-v1-newer','market-benchmark-v1','2026-10-02T05:00:00Z','SUCCEEDED')").run();
+
+    const payload = loadBenchmarkViewerPayload(db);
+    assert.ok(payload);
+    assert.equal(payload.analysis_run_id, "run-v2");
+    assert.equal(payload.analysis_version, "market-benchmark-v2");
   } finally {
     db.close();
   }
